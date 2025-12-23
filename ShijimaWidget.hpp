@@ -21,12 +21,14 @@
 #include <QWidget>
 #include <memory>
 #include <QRegion>
+#include <QTimer>
 #include "Asset.hpp"
 #include "SoundEffectManager.hpp"
 #include <shijima/mascot/manager.hpp>
 #include <shijima/mascot/environment.hpp>
 #include "PlatformWidget.hpp"
 #include "MascotData.hpp"
+#include "MessageBubble.hpp"
 
 class QPushButton;
 class QPaintEvent;
@@ -66,6 +68,8 @@ public:
     QString const& mascotName() {
         return m_data->name();
     }
+    void showMessage(QString const& text, int duration = 0);
+    void hideMessage();
     ~ShijimaWidget();
 protected:
     void paintEvent(QPaintEvent *) override;
@@ -100,4 +104,5 @@ private:
     bool m_paused = false;
     bool m_markedForDeletion = false;
     int m_mascotId;
+    MessageBubble *m_messageBubble;
 };

@@ -1,12 +1,14 @@
-# Shijima-Qt API Documentation
+# 🐸 Shijima-Qt API 文档（中文版）
 
-Base URL: http://127.0.0.1:32456/shijima/api/v1
+**基础地址：** `http://127.0.0.1:32456/guyi/api/v1`
 
-## GET /mascots
+---
 
-Returns a list of mascots that are on the screen.
+## 🧩 GET `/mascots`
 
-**Sample response:**
+返回当前屏幕上正在显示的桌宠列表。
+
+**示例响应：**
 
 ```json
 {
@@ -35,11 +37,14 @@ Returns a list of mascots that are on the screen.
 }
 ```
 
-## POST /mascots
+---
 
-Spawns a new mascot. One of `name` or `data_id` must be specified.
+## 🐣 POST `/mascots`
 
-**Request format:**
+生成（召唤）一个新的桌宠。  
+参数中必须指定 `name` 或 `data_id` 之一。
+
+**请求格式：**
 
 ```json
 {
@@ -53,7 +58,7 @@ Spawns a new mascot. One of `name` or `data_id` must be specified.
 }
 ```
 
-**Sample request:**
+**示例请求：**
 
 ```json
 {
@@ -66,7 +71,7 @@ Spawns a new mascot. One of `name` or `data_id` must be specified.
 }
 ```
 
-**Sample response:**
+**示例响应：**
 
 ```json
 {
@@ -83,15 +88,19 @@ Spawns a new mascot. One of `name` or `data_id` must be specified.
 }
 ```
 
-## DELETE /mascots
+---
 
-Dismisses all mascots.
+## 🧹 DELETE `/mascots`
 
-## GET /mascots/:id
+关闭（移除）所有正在屏幕上的桌宠。
 
-Gets data for one mascot.
+---
 
-**Sample response:**
+## 🔍 GET `/mascots/:id`
+
+获取指定桌宠的详细信息。
+
+**示例响应：**
 
 ```json
 {
@@ -108,11 +117,13 @@ Gets data for one mascot.
 }
 ```
 
-## PUT /mascots/:id
+---
 
-Alters the state of an existing mascot.
+## ✏️ PUT `/mascots/:id`
 
-**Request format:**
+修改指定桌宠的状态。
+
+**请求格式：**
 
 ```json
 {
@@ -125,7 +136,7 @@ Alters the state of an existing mascot.
 }
 ```
 
-**Sample request:**
+**示例请求：**
 
 ```json
 {
@@ -138,7 +149,7 @@ Alters the state of an existing mascot.
 }
 ```
 
-**Sample response:**
+**示例响应：**
 
 ```json
 {
@@ -155,11 +166,13 @@ Alters the state of an existing mascot.
 }
 ```
 
-## GET /loadedMascots
+---
 
-Returns a list of mascots that are loaded into Shijima-Qt and can be spawned.
+## 📦 GET `/loadedMascots`
 
-**Sample response:**
+返回当前已加载（可用）的桌宠列表。
+
+**示例响应：**
 
 ```json
 {
@@ -180,11 +193,13 @@ Returns a list of mascots that are loaded into Shijima-Qt and can be spawned.
 }
 ```
 
-## GET /loadedMascots/:id
+---
 
-Returns information about a specific loaded mascot.
+## 📄 GET `/loadedMascots/:id`
 
-**Sample response:**
+返回指定已加载桌宠的信息。
+
+**示例响应：**
 
 ```json
 {
@@ -195,6 +210,58 @@ Returns information about a specific loaded mascot.
 }
 ```
 
-## GET /loadedMascots/:id/preview.png
+---
 
-Returns the preview image for a loaded mascot.
+## 🖼️ GET `/loadedMascots/:id/preview.png`
+
+返回指定桌宠的预览图片。
+
+---
+
+## 💬 POST `/mascots/:id/message`
+
+在指定桌宠上方显示一条对话气泡。
+
+**请求格式：**
+
+```json
+{
+    "text": "string",
+    "duration": "int (可选，单位：毫秒)"
+}
+```
+
+**示例请求：**
+
+```json
+{
+    "text": "Hello! I'm a shimeji!",
+    "duration": 5000
+}
+```
+
+**示例响应：**
+
+```json
+{
+    "success": true
+}
+```
+
+**说明：**
+- 如果 `duration` 为 `0` 或未填写，消息会一直显示，直到手动关闭。
+- 如果 `duration` > 0，则消息会在指定毫秒数后自动消失。
+
+---
+
+## 🚫 DELETE `/mascots/:id/message`
+
+隐藏指定桌宠的气泡消息。
+
+**示例响应：**
+
+```json
+{
+    "success": true
+}
+```

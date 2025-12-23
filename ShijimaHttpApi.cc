@@ -142,7 +142,7 @@ static bool selectorEval(ShijimaWidget *mascot, std::string const& selector) {
 ShijimaHttpApi::ShijimaHttpApi(ShijimaManager *manager): m_server(new Server),
     m_thread(nullptr), m_manager(manager), m_host(""), m_port(-1)
 {
-    m_server->Get("/shijima/api/v1/mascots",
+    m_server->Get("/guyi/api/v1/mascots",
         [this](Request const& req, Response &res)
     {
         QJsonArray array;
@@ -163,7 +163,7 @@ ShijimaHttpApi::ShijimaHttpApi(ShijimaManager *manager): m_server(new Server),
         object["mascots"] = array;
         sendJson(res, object);
     });
-    m_server->Post("/shijima/api/v1/mascots",
+    m_server->Post("/guyi/api/v1/mascots",
         [this](Request const& req, Response &res)
     {
         auto json = jsonForRequest(req);
@@ -209,7 +209,7 @@ ShijimaHttpApi::ShijimaHttpApi(ShijimaManager *manager): m_server(new Server),
         });
         sendJson(res, object);
     });
-    m_server->Put("/shijima/api/v1/mascots/([0-9]+)",
+    m_server->Put("/guyi/api/v1/mascots/([0-9]+)",
         [this](Request const& req, Response &res)
     {
         auto json = jsonForRequest(req);
@@ -234,7 +234,7 @@ ShijimaHttpApi::ShijimaHttpApi(ShijimaManager *manager): m_server(new Server),
         });
         sendJson(res, object);
     });
-    m_server->Get("/shijima/api/v1/mascots/([0-9]+)",
+    m_server->Get("/guyi/api/v1/mascots/([0-9]+)",
         [this](Request const& req, Response &res)
     {
         auto id = std::stoi(req.matches[1].str());
@@ -250,7 +250,7 @@ ShijimaHttpApi::ShijimaHttpApi(ShijimaManager *manager): m_server(new Server),
         });
         sendJson(res, object);
     });
-    m_server->Delete("/shijima/api/v1/mascots/([0-9]+)",
+    m_server->Delete("/guyi/api/v1/mascots/([0-9]+)",
         [this](Request const& req, Response &res)
     {
         auto id = std::stoi(req.matches[1].str());
@@ -267,7 +267,7 @@ ShijimaHttpApi::ShijimaHttpApi(ShijimaManager *manager): m_server(new Server),
         });
         sendJson(res, object);
     });
-    m_server->Delete("/shijima/api/v1/mascots",
+    m_server->Delete("/guyi/api/v1/mascots",
         [this](Request const& req, Response &res)
     {
         auto json = jsonForRequest(req);
@@ -289,7 +289,7 @@ ShijimaHttpApi::ShijimaHttpApi(ShijimaManager *manager): m_server(new Server),
         });
         sendJson(res, {});
     });
-    m_server->Get("/shijima/api/v1/loadedMascots",
+    m_server->Get("/guyi/api/v1/loadedMascots",
         [this](Request const&, Response &res)
     {
         QJsonArray array;
@@ -303,12 +303,68 @@ ShijimaHttpApi::ShijimaHttpApi(ShijimaManager *manager): m_server(new Server),
         object["loaded_mascots"] = array;
         sendJson(res, object);
     });
-    m_server->Get("/shijima/api/v1/ping",
+    m_server->Post("/guyi/api/v1/mascots/([0-9]+)/message",
+        [this](Request const& req, Response &res)
+    {
+        auto json = jsonForRequest(req);
+        if (!json.has_value()) {
+            badRequest(req, res);
+            return;
+        }
+        auto id = std::stoi(req.matches[1].str());
+        QJsonObject object;
+        m_manager->onTickSync([&json, &object, &res, id]
+            (ShijimaManager *manager)
+        {
+            if (manager->mascotsById().count(id) == 1) {
+                auto widget = manager->mascotsById().at(id);
+                auto textValue = json->take("text");
+                auto durationValue = json->take("duration");
+                if (textValue.isString()) {
+                    QString text = textValue.toString();
+                    int duration = 0;
+                    if (durationValue.isDouble()) {
+                        duration = durationValue.toInt();
+                    }
+                    widget->showMessage(text, duration);
+                    object["success"] = true;
+                }
+                else {
+                    res.status = 400;
+                    object["error"] = "Missing or invalid 'text' field";
+                }
+            }
+            else {
+                res.status = 404;
+                object["error"] = "No such mascot";
+            }
+        });
+        sendJson(res, object);
+    });
+    m_server->Delete("/guyi/api/v1/mascots/([0-9]+)/message",
+        [this](Request const& req, Response &res)
+    {
+        auto id = std::stoi(req.matches[1].str());
+        QJsonObject object;
+        m_manager->onTickSync([&object, &res, id](ShijimaManager *manager){
+            if (manager->mascotsById().count(id) == 1) {
+                auto mascot = manager->mascotsById().at(id);
+                mascot->hideMessage();
+                object["success"] = true;
+            }
+            else {
+                res.status = 404;
+                object["error"] = "404 Not Found";
+            }
+        });
+        sendJson(res, object);
+    });
+    m_server->Get("/guyi/api/v1/ping",
         [](Request const&, Response &res)
     {
         sendJson(res, {});
     });
-    m_server->Get("/shijima/api/v1/loadedMascots/([0-9]+)",
+    m_server->Get("/guyi/api/v1/loadedMascots/([0-9]+)",
         [this](Request const& req, Response &res)
     {
         auto id = std::stoi(req.matches[1].str());
@@ -324,7 +380,7 @@ ShijimaHttpApi::ShijimaHttpApi(ShijimaManager *manager): m_server(new Server),
         });
         sendJson(res, object);
     });
-    m_server->Get("/shijima/api/v1/loadedMascots/([0-9]+)/preview.png",
+    m_server->Get("/guyi/api/v1/loadedMascots/([0-9]+)/preview.png",
         [this](Request const& req, Response &res)
     {
         auto id = std::stoi(req.matches[1].str());

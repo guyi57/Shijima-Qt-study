@@ -55,6 +55,7 @@
 !/licenses/*.rst
 !/licenses/*.txt
 licenses_generated.hpp
+api_doc_generated.hpp
 DefaultMascot.cc
 !/bundle-default.sh
 !/DefaultMascot/

@@ -328,7 +328,7 @@ static int getMascotID(httplib::Client &client, QVariant &idVariant,
         if (!selector.isEmpty()) {
             params.insert({ "selector", selector.toStdString() });
         }
-        if (auto res = client.Get("/shijima/api/v1/mascots", params,
+        if (auto res = client.Get("/guyi/api/v1/mascots", params,
             {}))
         {
             QJsonObject object;
@@ -371,7 +371,7 @@ static int cliMain(int argc, char **argv) {
         if (selector.typeId() == QMetaType::QString) {
             params.insert({ "selector", selector.toString().toStdString() });
         }
-        if (auto res = client.Get("/shijima/api/v1/mascots",
+        if (auto res = client.Get("/guyi/api/v1/mascots",
             params, {}))
         {
             QJsonObject object;
@@ -418,7 +418,7 @@ static int cliMain(int argc, char **argv) {
                 std::endl;
             return EXIT_FAILURE;
         }
-        if (auto res = client.Get("/shijima/api/v1/loadedMascots")) {
+        if (auto res = client.Get("/guyi/api/v1/loadedMascots")) {
             QJsonObject object;
             if (!parseAPIResult(res, object)) {
                 if (json.toBool() && object.contains("error")) {
@@ -493,7 +493,7 @@ static int cliMain(int argc, char **argv) {
         }
         QJsonDocument doc { object };
         auto json = doc.toJson(QJsonDocument::Compact);
-        if (auto res = client.Post("/shijima/api/v1/mascots",
+        if (auto res = client.Post("/guyi/api/v1/mascots",
             std::string { &json[0], (size_t)json.size() }, "application/json"))
         {
             QJsonObject object;
@@ -543,7 +543,7 @@ static int cliMain(int argc, char **argv) {
         }
         QJsonDocument doc { object };
         auto json = doc.toJson(QJsonDocument::Compact);
-        if (auto res = client.Put("/shijima/api/v1/mascots/"
+        if (auto res = client.Put("/guyi/api/v1/mascots/"
             + std::to_string(id.toInt()),
             std::string { &json[0], (size_t)json.size() }, "application/json"))
         {
@@ -584,7 +584,7 @@ static int cliMain(int argc, char **argv) {
         if (int ret = getMascotID(client, id, selector); ret != EXIT_SUCCESS) {
             return ret;
         }
-        if (auto res = client.Delete("/shijima/api/v1/mascots/"
+        if (auto res = client.Delete("/guyi/api/v1/mascots/"
             + std::to_string(id.toInt())))
         {
             if (parseAPIResult(res)) {
@@ -611,7 +611,7 @@ static int cliMain(int argc, char **argv) {
         }
         QJsonDocument doc { obj };
         auto bytes = doc.toJson();
-        if (auto res = client.Delete("/shijima/api/v1/mascots",
+        if (auto res = client.Delete("/guyi/api/v1/mascots",
             std::string { &bytes[0], (size_t)bytes.size() },
             "application/json" ))
         {

@@ -14,9 +14,11 @@ SOURCES = main.cc \
 	ShijimaWidget.cc \
 	SoundEffectManager.cc \
 	ShijimaLicensesDialog.cc \
+	ShijimaApiDialog.cc \
 	ShimejiInspectorDialog.cc \
 	DefaultMascot.cc \
 	ShijimaHttpApi.cc \
+	MessageBubble.cc \
 	cli.cc \
 	resources.rc
 
@@ -35,6 +37,10 @@ LICENSE_FILES := Shijima-Qt.LICENSE.txt \
 	rapidxml.LICENSE.txt
 
 LICENSE_FILES := $(addprefix licenses/,$(LICENSE_FILES))
+
+API_DOC_FILES := MESSAGE_API.txt
+
+API_DOC_FILES := $(addprefix api_docs/,$(API_DOC_FILES))
 
 QT_LIBS = Widgets Core Gui Concurrent
 
@@ -157,6 +163,9 @@ ShijimaLicensesDialog.cc: licenses_generated.hpp
 licenses_generated.hpp: $(LICENSE_FILES) Makefile
 	echo 'static const char *shijima_licenses = R"(' > licenses_generated.hpp
 	echo 'Licenses for the software components used in Shijima-Qt are listed below.' >> licenses_generated.hpp
+	echo '基础项目代码来自：Shijima-Qt ：https://getshijima.app' >> licenses_generated.hpp
+	echo '项目地址 ：https://github.com/guyi57/Shijima-Qt-study' >> licenses_generated.hpp
+	echo '原项目源地址 ：https://github.com/pixelomer/Shijima-Qt/issues' >> licenses_generated.hpp
 	for file in $^; do \
 		[ "$$file" != "Makefile" ] || continue; \
 		(echo; echo) >> licenses_generated.hpp; \
@@ -165,6 +174,17 @@ licenses_generated.hpp: $(LICENSE_FILES) Makefile
 		cat $$file >> licenses_generated.hpp; \
 	done
 	echo ')";' >> licenses_generated.hpp
+
+ShijimaApiDialog.cc: api_doc_generated.hpp
+	touch ShijimaApiDialog.cc
+
+api_doc_generated.hpp: $(API_DOC_FILES) Makefile
+	echo 'static const char *shijima_api_doc = R"(' > api_doc_generated.hpp
+	for file in $^; do \
+		[ "$$file" != "Makefile" ] || continue; \
+		cat $$file >> api_doc_generated.hpp; \
+	done
+	echo ')";' >> api_doc_generated.hpp
 
 libshijima/build/Makefile: libshijima/CMakeLists.txt FORCE
 	mkdir -p libshijima/build && cd libshijima/build && $(CMAKE) $(CMAKEFLAGS) -DSHIJIMA_BUILD_EXAMPLES=NO ..

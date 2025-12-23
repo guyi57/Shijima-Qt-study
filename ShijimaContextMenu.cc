@@ -19,9 +19,74 @@
 #include "ShijimaContextMenu.hpp"
 #include "ShijimaWidget.hpp"
 #include "ShijimaManager.hpp"
+#include <QMap>
+
+// 行为名称中文翻译映射表
+static QString translateBehaviorName(const std::string &name) {
+    static QMap<QString, QString> translations = {
+        // 基础行为
+        {"Fall", "下落"},
+        {"Dragged", "被拖拽"},
+        {"Thrown", "被投掷"},
+        {"ChaseMouse", "追逐鼠标"},
+        
+        // 坐姿相关
+        {"SitDown", "坐下"},
+        {"SitAndFaceMouse", "坐着面向鼠标"},
+        {"SitAndSpinHead", "坐着转头"},
+        {"SitWhileDanglingLegs", "坐着晃腿"},
+        {"StandUp", "站起来"},
+        
+        // 躺卧相关
+        {"LieDown", "躺下"},
+        
+        // 行走相关
+        {"WalkAlongWorkAreaFloor", "沿地板行走"},
+        {"WalkLeftAlongFloorAndSit", "向左走并坐下"},
+        {"WalkRightAlongFloorAndSit", "向右走并坐下"},
+        {"WalkLeftAndSit", "向左走并坐下"},
+        {"WalkRightAndSit", "向右走并坐下"},
+        {"WalkAndGrabBottomLeftWall", "走到左墙边"},
+        {"WalkAndGrabBottomRightWall", "走到右墙边"},
+        {"RunAlongWorkAreaFloor", "沿地板奔跑"},
+        
+        // 爬行相关
+        {"CrawlAlongWorkAreaFloor", "沿地板爬行"},
+        {"CrawlAlongIECeiling", "沿天花板爬行"},
+        
+        // 攀爬相关
+        {"ClimbIEWall", "爬墙"},
+        {"HoldOntoWall", "抓住墙壁"},
+        {"FallFromWall", "从墙上掉落"},
+        {"HoldOntoCeiling", "抓住天花板"},
+        {"FallFromCeiling", "从天花板掉落"},
+        {"GrabWorkAreaBottomLeftWall", "抓住左下角"},
+        {"GrabWorkAreaBottomRightWall", "抓住右下角"},
+        
+        // 跳跃相关
+        {"JumpFromBottomOfIE", "从底部跳起"},
+        
+        // 繁殖相关
+        {"SplitIntoTwo", "分裂成两个"},
+        {"PullUpShimeji", "拉起桌宠"},
+        {"PullUp", "被拉起"},
+        {"Divided", "被分裂"},
+        
+        // 其他行为
+        {"Yawn", "打哈欠"},
+        {"Sleep", "睡觉"},
+        {"Wave", "挥手"},
+        {"Dance", "跳舞"},
+        {"Jump", "跳跃"},
+        {"Spin", "旋转"},
+    };
+    
+    QString qname = QString::fromStdString(name);
+    return translations.value(qname, qname);
+}
 
 ShijimaContextMenu::ShijimaContextMenu(ShijimaWidget *parent)
-    : QMenu("Context menu", parent)
+    : QMenu("右键菜单", parent)
 {
     QAction *action;
 
@@ -35,9 +100,10 @@ ShijimaContextMenu::ShijimaContextMenu(ShijimaWidget *parent)
                 behaviors.push_back(behavior->name);
             }
         }
-        auto behaviorsMenu = addMenu("Behaviors");
+        auto behaviorsMenu = addMenu("行为");
         for (std::string &behavior : behaviors) {
-            action = behaviorsMenu->addAction(QString::fromStdString(behavior));
+            QString displayName = translateBehaviorName(behavior);
+            action = behaviorsMenu->addAction(displayName);
             connect(action, &QAction::triggered, [this, behavior](){
                 shijimaParent()->m_mascot->next_behavior(behavior);
             });
@@ -45,19 +111,19 @@ ShijimaContextMenu::ShijimaContextMenu(ShijimaWidget *parent)
     }
 
     // Show manager
-    action = addAction("Show manager");
+    action = addAction("显示管理器");
     connect(action, &QAction::triggered, [](){
         ShijimaManager::defaultManager()->setManagerVisible(true);
     });
 
     // Inspect
-    action = addAction("Inspect");
+    action = addAction("检查器");
     connect(action, &QAction::triggered, [this](){
         shijimaParent()->showInspector();
     });
 
     // Pause checkbox
-    action = addAction("Pause");
+    action = addAction("暂停");
     action->setCheckable(true);
     action->setChecked(parent->m_paused);
     connect(action, &QAction::triggered, [this](bool checked){
@@ -65,26 +131,26 @@ ShijimaContextMenu::ShijimaContextMenu(ShijimaWidget *parent)
     });
 
     // Call another
-    action = addAction("Call another");
+    action = addAction("召唤同伴");
     connect(action, &QAction::triggered, [this](){
         ShijimaManager::defaultManager()->spawn(this->shijimaParent()->mascotName()
             .toStdString());
     });
 
     // Dismiss all but one
-    action = addAction("Dismiss all but one");
+    action = addAction("只保留一个");
     connect(action, &QAction::triggered, [this](){
         ShijimaManager::defaultManager()->killAllButOne(this->shijimaParent());
     });
 
     // Dismiss all
-    action = addAction("Dismiss all");
+    action = addAction("全部关闭");
     connect(action, &QAction::triggered, [](){
         ShijimaManager::defaultManager()->killAll();
     });
 
     // Dismiss
-    action = addAction("Dismiss");
+    action = addAction("关闭");
     connect(action, &QAction::triggered, parent, &ShijimaWidget::closeAction);
 }
 

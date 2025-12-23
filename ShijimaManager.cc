@@ -37,6 +37,7 @@
 #include <QRandomGenerator>
 #include "PlatformWidget.hpp"
 #include "ShijimaLicensesDialog.hpp"
+#include "ShijimaApiDialog.hpp"
 #include "ShijimaWidget.hpp"
 #include <QDirIterator>
 #include <QDesktopServices>
@@ -215,7 +216,7 @@ void ShijimaManager::reloadMascot(QString const& name) {
 }
 
 void ShijimaManager::importAction() {
-    auto paths = QFileDialog::getOpenFileNames(this, "Choose shimeji archive...");
+    auto paths = QFileDialog::getOpenFileNames(this, "选择桌宠压缩包...");
     if (paths.isEmpty()) {
         return;
     }
@@ -241,15 +242,15 @@ void ShijimaManager::deleteAction() {
     if (selected.size() == 0) {
         return;
     }
-    QString msg = "Are you sure you want to delete these shimeji?";
+    QString msg = "确定要删除这些桌宠吗？";
     for (long i=0; i<selected.size() && i<5; ++i) {
         msg += "\n* " + selected[i]->text();
     }
     if (selected.size() > 5) {
-        msg += "\n... and " + QString::number(selected.size() - 5) + " other(s)";
+        msg += "\n... 以及其他 " + QString::number(selected.size() - 5) + " 个";
     }
     QMessageBox msgBox { this };
-    msgBox.setWindowTitle("Delete shimeji");
+    msgBox.setWindowTitle("删除桌宠");
     msgBox.setText(msg);
     msgBox.setStandardButtons(QMessageBox::StandardButton::Yes |
         QMessageBox::StandardButton::No);
@@ -297,34 +298,34 @@ void ShijimaManager::buildToolbar() {
     QMenu *menu;
     QMenu *submenu;
     
-    menu = menuBar()->addMenu("File");
+    menu = menuBar()->addMenu("文件");
     {
-        action = menu->addAction("Import shimeji...");
+        action = menu->addAction("导入桌宠...");
         connect(action, &QAction::triggered, this, &ShijimaManager::importAction);
 
-        action = menu->addAction("Show shimeji folder");
+        action = menu->addAction("打开桌宠文件夹");
         connect(action, &QAction::triggered, [this](){
             QDesktopServices::openUrl(QUrl::fromLocalFile(m_mascotsPath));
         });
 
-        action = menu->addAction("Quit");
+        action = menu->addAction("退出");
         connect(action, &QAction::triggered, this, &ShijimaManager::quitAction);
     }
 
-    menu = menuBar()->addMenu("Edit");
+    menu = menuBar()->addMenu("编辑");
     {
-        action = menu->addAction("Delete shimeji", QKeySequence::StandardKey::Delete);
+        action = menu->addAction("删除桌宠", QKeySequence::StandardKey::Delete);
         connect(action, &QAction::triggered, this, &ShijimaManager::deleteAction);
     }
 
-    menu = menuBar()->addMenu("Settings");
+    menu = menuBar()->addMenu("设置");
     {
         {
             static const QString key = "multiplicationEnabled";
             bool initial = m_settings.value(key, 
                 QVariant::fromValue(true)).toBool();
 
-            action = menu->addAction("Enable multiplication");
+            action = menu->addAction("启用繁殖");
             action->setCheckable(true);
             action->setChecked(initial);
             for (auto &env : m_env) {
@@ -339,7 +340,7 @@ void ShijimaManager::buildToolbar() {
         }
 
         {
-            action = menu->addAction("Windowed mode");
+            action = menu->addAction("窗口模式");
             m_windowedModeAction = action;
             action->setCheckable(true);
             action->setChecked(false);
@@ -353,7 +354,7 @@ void ShijimaManager::buildToolbar() {
 
             QColor initial = m_settings.value(key, "#FF0000").toString();
 
-            action = menu->addAction("Windowed mode background...");
+            action = menu->addAction("窗口模式背景...");
             m_sandboxBackground = initial;
             updateSandboxBackground();
             connect(action, &QAction::triggered, [this](){
@@ -368,7 +369,7 @@ void ShijimaManager::buildToolbar() {
             });
         }
 
-        submenu = menu->addMenu("Scale");
+        submenu = menu->addMenu("缩放");
         {
             static const QString key = "userScale";
             m_userScale = m_settings.value(key,
@@ -379,7 +380,7 @@ void ShijimaManager::buildToolbar() {
             };
 
             auto makeCustomActionText = [this, makeScaleText]() {
-                return QString { "Custom... (" } +
+                return QString { "自定义... (" } +
                     makeScaleText(m_userScale) + ")";
             };
             QAction *customAction = submenu->addAction(makeCustomActionText());
@@ -421,7 +422,7 @@ void ShijimaManager::buildToolbar() {
                 QSlider slider { Qt::Horizontal };
                 QLabel label;
                 QPushButton button;
-                button.setText("Save");
+                button.setText("保存");
                 label.setMinimumWidth(80);
                 slider.setMinimumWidth(300);
                 layout.addRow(&label, &slider);
@@ -454,23 +455,29 @@ void ShijimaManager::buildToolbar() {
         }
     }
 
-    menu = menuBar()->addMenu("Help");
+    menu = menuBar()->addMenu("帮助");
     {
-        action = menu->addAction("View Licenses");
+        action = menu->addAction("查看许可证");
         connect(action, &QAction::triggered, [this](){
             ShijimaLicensesDialog dialog { this };
             dialog.exec();
         });
 
-        action = menu->addAction("Visit Shijima Homepage");
-        connect(action, &QAction::triggered, [](){
-            QDesktopServices::openUrl(QUrl { "https://getshijima.app" });
+        action = menu->addAction("消息接口介绍");
+        connect(action, &QAction::triggered, [this](){
+            ShijimaApiDialog dialog { this };
+            dialog.exec();
         });
 
-        action = menu->addAction("Report Issue");
-        connect(action, &QAction::triggered, [](){
-            QDesktopServices::openUrl(QUrl { "https://github.com/pixelomer/Shijima-Qt/issues" });
-        });
+        // action = menu->addAction("访问 Shijima 主页");
+        // connect(action, &QAction::triggered, [](){
+        //     QDesktopServices::openUrl(QUrl { "https://getshijima.app" });
+        // });
+
+        // action = menu->addAction("报告问题");
+        // connect(action, &QAction::triggered, [](){
+        //     QDesktopServices::openUrl(QUrl { "https://github.com/pixelomer/Shijima-Qt/issues" });
+        // });
     }
 }
 
@@ -525,10 +532,10 @@ void ShijimaManager::importWithDialog(QList<QString> const& paths) {
     dialog->setRange(0, 0);
     QPushButton *cancelButton = new QPushButton;
     cancelButton->setEnabled(false);
-    cancelButton->setText("Cancel");
+    cancelButton->setText("取消");
     dialog->setModal(true);
     dialog->setCancelButton(cancelButton);
-    dialog->setLabelText("Importing shimeji...");
+    dialog->setLabelText("正在导入桌宠...");
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     dialog->show();
     //hide();
@@ -547,15 +554,15 @@ void ShijimaManager::importWithDialog(QList<QString> const& paths) {
             QString msg;
             QMessageBox::Icon icon;
             if (changed.size() > 0) {
-                msg = QString::fromStdString("Imported " + std::to_string(changed.size()) +
-                    " mascot" + (changed.size() == 1 ? "" : "s") + ".");
+                msg = QString::fromStdString("已导入 " + std::to_string(changed.size()) +
+                    " 个桌宠。");
                 icon = QMessageBox::Icon::Information;
             }
             else {
-                msg = "Could not import any mascots from the specified archive(s).";
+                msg = "无法从指定的压缩包中导入任何桌宠。";
                 icon = QMessageBox::Icon::Warning;
             }
-            QMessageBox msgBox { icon, "Import", msg,
+            QMessageBox msgBox { icon, "导入", msg,
                 QMessageBox::StandardButton::Ok, this };
             msgBox.exec();
         });
@@ -576,9 +583,7 @@ void ShijimaManager::showEvent(QShowEvent *event) {
     else {
         if (m_loadedMascots.size() == 1) {
             auto msgBox = new QMessageBox { this };
-            msgBox->setText("Welcome to Shijima! Get started by dragging and dropping a "
-                "shimeji archive to the manager window. You can also import archives "
-                "by selecting File > Import.");
+            msgBox->setText("欢迎使用！你可以拖动桌宠，右键操作桌宠。消息接口是端口是127.0.0.1:32456/guyi/api/v1");
             msgBox->addButton(QMessageBox::StandardButton::Ok);
             msgBox->setAttribute(Qt::WA_DeleteOnClose);
             msgBox->show();

@@ -47,7 +47,7 @@ ShijimaWidget::ShijimaWidget(MascotData *mascotData,
     PlatformWidget(parent, PlatformWidget::ShowOnAllDesktops),
 #endif
     m_windowedMode(windowedMode), m_data(mascotData),
-    m_inspector(nullptr), m_mascotId(mascotId)
+    m_inspector(nullptr), m_mascotId(mascotId), m_messageBubble(nullptr)
 {
     m_windowHeight = 128;
     m_windowWidth = 128;
@@ -74,6 +74,8 @@ ShijimaWidget::ShijimaWidget(MascotData *mascotData,
         setWindowFlags(flags);
     }
     setFixedSize(m_windowWidth, m_windowHeight);
+    
+    m_messageBubble = new MessageBubble(m_windowedMode ? parent : nullptr);
 }
 
 
@@ -216,6 +218,18 @@ bool ShijimaWidget::updateOffsets() {
     }
     move(winX, winY);
 
+    // Update message bubble position
+    if (m_messageBubble != nullptr && m_messageBubble->hasMessage()) {
+        QPoint bubblePos;
+        if (m_windowedMode) {
+            bubblePos = mapToParent(QPoint(m_windowWidth / 2 - m_messageBubble->width() / 2, -m_messageBubble->height()));
+        }
+        else {
+            bubblePos = mapToGlobal(QPoint(m_windowWidth / 2 - m_messageBubble->width() / 2, -m_messageBubble->height()));
+        }
+        m_messageBubble->move(bubblePos);
+    }
+
     return needsRepaint;
 }
 
@@ -304,6 +318,10 @@ ShijimaWidget::~ShijimaWidget() {
         m_inspector->close();
         delete m_inspector;
     }
+    if (m_messageBubble != nullptr) {
+        m_messageBubble->close();
+        delete m_messageBubble;
+    }
     setDragTarget(nullptr);
 }
 
@@ -367,5 +385,18 @@ void ShijimaWidget::mouseReleaseEvent(QMouseEvent *event) {
     if (event->button() == Qt::MouseButton::LeftButton) {
         m_dragTarget->m_mascot->state->dragging = false;
         setDragTarget(nullptr);
+    }
+}
+
+void ShijimaWidget::showMessage(QString const& text, int duration) {
+    if (m_messageBubble != nullptr) {
+        m_messageBubble->showMessage(text, duration);
+        updateOffsets();
+    }
+}
+
+void ShijimaWidget::hideMessage() {
+    if (m_messageBubble != nullptr) {
+        m_messageBubble->hideMessage();
     }
 }

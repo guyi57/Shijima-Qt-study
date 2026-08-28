@@ -20,6 +20,19 @@
 #include <QWidget>
 #include <AppKit/AppKit.h>
 
+#include <objc/runtime.h>
+#include <QProcess>
+
+static BOOL NeverBecomeKey(id self, SEL _cmd) {
+    (void)self; (void)_cmd;
+    return NO;
+}
+
+static BOOL NeverBecomeMain(id self, SEL _cmd) {
+    (void)self; (void)_cmd;
+    return NO;
+}
+
 namespace Platform {
 
 void initialize(int argc, char **argv) {}
@@ -40,9 +53,127 @@ void showOnAllDesktops(QWidget *widget) {
     }
 }
 
+void setupFloatingBubbleWindow(QWidget *widget) {
+    NSView *bubbleView = (__bridge NSView *)((void *)widget->winId());
+    NSWindow *bubbleWin = [bubbleView window];
+    if (bubbleWin != nil) {
+        NSWindowCollectionBehavior behavior = [bubbleWin collectionBehavior];
+        behavior &= ~NSWindowCollectionBehaviorMoveToActiveSpace;
+        behavior |= (NSWindowCollectionBehaviorCanJoinAllSpaces |
+                     NSWindowCollectionBehaviorStationary |
+                     NSWindowCollectionBehaviorIgnoresCycle);
+        [bubbleWin setCollectionBehavior:behavior];
+        [bubbleWin setLevel:NSFloatingWindowLevel];
+        [bubbleWin setHidesOnDeactivate:NO];
+
+        Class originalClass = object_getClass(bubbleWin);
+        const char *subclassName = "ShijimaBubbleNonActivatingNSWindow";
+        Class subclass = objc_getClass(subclassName);
+        if (!subclass) {
+            subclass = objc_allocateClassPair(originalClass, subclassName, 0);
+            if (subclass) {
+                class_addMethod(subclass, @selector(canBecomeKeyWindow), (IMP)NeverBecomeKey, "c@:");
+                class_addMethod(subclass, @selector(canBecomeMainWindow), (IMP)NeverBecomeMain, "c@:");
+                objc_registerClassPair(subclass);
+            }
+        }
+        if (subclass) {
+            object_setClass(bubbleWin, subclass);
+        }
+    }
+}
+
+bool isAppFrontmost(const QString &appTarget) {
+    if (appTarget.trimmed().isEmpty()) return false;
+
+    @autoreleasepool {
+        NSRunningApplication *frontApp = [[NSWorkspace sharedWorkspace] frontmostApplication];
+        if (!frontApp) return false;
+
+        NSString *bundleId = [frontApp bundleIdentifier];
+        NSString *appName = [frontApp localizedName];
+        QString target = appTarget.trimmed();
+
+        if (bundleId != nil) {
+            QString curBundle = QString::fromNSString(bundleId);
+            if (curBundle.compare(target, Qt::CaseInsensitive) == 0) {
+                return true;
+            }
+        }
+        if (appName != nil) {
+            QString curName = QString::fromNSString(appName);
+            if (curName.compare(target, Qt::CaseInsensitive) == 0) {
+                return true;
+            }
+            if ((target.contains("antigravity-ide", Qt::CaseInsensitive) || target.contains("Antigravity IDE"))
+                && curName.contains("Antigravity", Qt::CaseInsensitive)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool openTargetApp(const QString &appTarget) {
+    if (appTarget.trimmed().isEmpty()) return false;
+
+    QString target = appTarget.trimmed();
+    NSString *nsTarget = target.toNSString();
+    bool launched = false;
+
+    if (target.contains("://")) {
+        NSURL *url = [NSURL URLWithString:nsTarget];
+        if (url) {
+            launched = [[NSWorkspace sharedWorkspace] openURL:url];
+        }
+    }
+    if (!launched) {
+        NSURL *appUrl = [[NSWorkspace sharedWorkspace] URLForApplicationWithBundleIdentifier:nsTarget];
+        if (appUrl != nil) {
+            NSWorkspaceOpenConfiguration *config = [NSWorkspaceOpenConfiguration configuration];
+            config.activates = YES;
+            [[NSWorkspace sharedWorkspace] openApplicationAtURL:appUrl configuration:config completionHandler:nil];
+            launched = true;
+        }
+    }
+    if (!launched && (target.endsWith(".app", Qt::CaseInsensitive) || target.startsWith("/"))) {
+        NSURL *appUrl = [NSURL fileURLWithPath:nsTarget];
+        if (appUrl != nil) {
+            NSWorkspaceOpenConfiguration *config = [NSWorkspaceOpenConfiguration configuration];
+            config.activates = YES;
+            [[NSWorkspace sharedWorkspace] openApplicationAtURL:appUrl configuration:config completionHandler:nil];
+            launched = true;
+        }
+    }
+    if (!launched) {
+        NSString *fullPath = [[NSWorkspace sharedWorkspace] fullPathForApplication:nsTarget];
+        if (fullPath != nil) {
+            NSURL *appUrl = [NSURL fileURLWithPath:fullPath];
+            if (appUrl != nil) {
+                NSWorkspaceOpenConfiguration *config = [NSWorkspaceOpenConfiguration configuration];
+                config.activates = YES;
+                [[NSWorkspace sharedWorkspace] openApplicationAtURL:appUrl configuration:config completionHandler:nil];
+                launched = true;
+            }
+        }
+    }
+    if (!launched) {
+        if (target.endsWith(".app", Qt::CaseInsensitive) || target.startsWith("/")) {
+            QProcess::startDetached("open", QStringList() << target);
+        } else if (target.contains(".") && !target.contains(" ")) {
+            QProcess::startDetached("open", QStringList() << "-b" << target);
+        } else {
+            QProcess::startDetached("open", QStringList() << "-a" << target);
+        }
+        launched = true;
+    }
+    return launched;
+}
+
 bool useWindowMasks() {
     return false;
 }
 
 }
+
 

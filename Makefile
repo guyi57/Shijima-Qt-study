@@ -43,9 +43,9 @@ SOURCES = src/main.cc \
 	src/timer/TimerManager.cc \
 	src/timer/TimerListDialog.cc \
 	$(PLATFORM_SYSTEM_SOURCES) \
-	src/ui/MessageBubble.mm \
-	src/ui/ScoreBadgeWidget.mm \
-	src/ui/PetStatusBarWidget.mm \
+	src/ui/MessageBubble.cc \
+	src/ui/ScoreBadgeWidget.cc \
+	src/ui/PetStatusBarWidget.cc \
 	src/ui/SelectionToolbar.cc \
 	src/ui/ShijimaContextMenu.cc \
 	src/ui/AskDialog.cc \
@@ -235,8 +235,11 @@ libshijima/build/Makefile: libshijima/CMakeLists.txt FORCE
 	mkdir -p libshijima/build && cd libshijima/build && $(CMAKE) $(CMAKEFLAGS) -DSHIJIMA_BUILD_EXAMPLES=NO ..
 
 libshimejifinder/build/Makefile: libshimejifinder/CMakeLists.txt FORCE
-	mkdir -p libshimejifinder/build && cd libshimejifinder/build && $(CMAKE) $(CMAKEFLAGS) \
+	mkdir -p libshimejifinder/build && cd libshimejifinder/build && \
+		PKG_CONFIG_PATH="/opt/homebrew/opt/libarchive/lib/pkgconfig:$$PKG_CONFIG_PATH" \
+		$(CMAKE) $(CMAKEFLAGS) \
 		-DSHIMEJIFINDER_BUILD_LIBARCHIVE=NO -DSHIMEJIFINDER_BUILD_EXAMPLES=NO ..
+
 
 libshimejifinder/build/libshimejifinder.a: libshimejifinder/build/Makefile
 	$(MAKE) -C libshimejifinder/build

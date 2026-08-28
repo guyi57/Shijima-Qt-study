@@ -45,7 +45,7 @@ void PetStatusBarWidget::setAvoidBubble(bool avoid)
 void PetStatusBarWidget::updateStatus(int stamina, int mood)
 {
     stamina = std::clamp(stamina, 0, 100);
-    int displayMood = std::clamp(mood < 0 ? (mood + 100) / 2 : (50 + mood / 2), 0, 100);
+
 
     // 1. 检查体力变动 -> 触发左侧绿光飘字微动画 (防高频打断)
     int staminaDelta = stamina - m_stamina;

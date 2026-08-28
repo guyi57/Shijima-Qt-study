@@ -20,6 +20,7 @@
 
 #include "ActiveWindow.hpp"
 #include "ActiveWindowObserver.hpp"
+#include <QString>
 
 class QWidget;
 
@@ -27,6 +28,10 @@ namespace Platform {
 
 void initialize(int argc, char **argv);
 void showOnAllDesktops(QWidget *widget);
+void setupFloatingBubbleWindow(QWidget *widget);
+bool isAppFrontmost(const QString &appTarget);
+bool openTargetApp(const QString &appTarget);
 bool useWindowMasks();
 
 }
+

@@ -158,6 +158,23 @@ void showOnAllDesktops(QWidget *widget) {
     }
 }
 
+#include <QDesktopServices>
+#include <QUrl>
+
+void setupFloatingBubbleWindow(QWidget *widget) {
+    showOnAllDesktops(widget);
+}
+
+bool isAppFrontmost(const QString &appTarget) {
+    Q_UNUSED(appTarget);
+    return false;
+}
+
+bool openTargetApp(const QString &appTarget) {
+    if (appTarget.trimmed().isEmpty()) return false;
+    return QDesktopServices::openUrl(QUrl::fromUserInput(appTarget.trimmed()));
+}
+
 bool useWindowMasks() {
     return windowMasksEnabled;
 }

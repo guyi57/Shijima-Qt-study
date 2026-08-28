@@ -1,8 +1,5 @@
-// 
-// Shijima-Qt - Interactive Message Bubble with Markdown & Hyperlink Support Implementation
-// 
-
 #include "MessageBubble.hpp"
+#include "Platform/Platform.hpp"
 #include <QPainter>
 #include <QPainterPath>
 #include <QFontMetrics>
@@ -18,31 +15,11 @@
 #include "MessageHistoryManager.hpp"
 #include "MessageHistoryDialog.hpp"
 
-#if defined(__APPLE__)
-#import <AppKit/AppKit.h>
-#import <objc/runtime.h>
-#elif defined(_WIN32)
-#include <windows.h>
-#include <shellapi.h>
-#endif
-
-
-#if defined(__APPLE__)
-static BOOL NeverBecomeKey(id self, SEL _cmd) {
-    (void)self; (void)_cmd;
-    return NO;
-}
-
-static BOOL NeverBecomeMain(id self, SEL _cmd) {
-    (void)self; (void)_cmd;
-    return NO;
-}
-#endif
-
 // ==========================================
 // 1:1 对标截图的高质感胶囊按钮组件（独立彩色图标徽章 + 深色文字）
 // ==========================================
 class IconCardButton : public QWidget {
+
 public:
     IconCardButton(const QString &icon, const QString &text, const QString &iconBg, QWidget *parent = nullptr)
         : QWidget(parent), m_defaultText(text), m_iconBg(iconBg)
@@ -300,46 +277,10 @@ MessageBubble::MessageBubble(QWidget *parent)
     setWindowFlags(Qt::ToolTip | Qt::FramelessWindowHint | 
         Qt::WindowStaysOnTopHint | Qt::WindowDoesNotAcceptFocus);
 
-#if defined(__APPLE__)
-    NSView *bubbleView = (__bridge NSView *)((void *)winId());
-    NSWindow *bubbleWin = [bubbleView window];
-    if (bubbleWin != nil) {
-        NSWindowCollectionBehavior behavior = [bubbleWin collectionBehavior];
-        behavior &= ~NSWindowCollectionBehaviorMoveToActiveSpace;
-        behavior |= (NSWindowCollectionBehaviorCanJoinAllSpaces |
-                     NSWindowCollectionBehaviorStationary |
-                     NSWindowCollectionBehaviorIgnoresCycle);
-        [bubbleWin setCollectionBehavior:behavior];
-        [bubbleWin setLevel:NSFloatingWindowLevel];
-        [bubbleWin setHidesOnDeactivate:NO];
-
-        // 终极无感防失焦：Runtime 替换为永不激活的 KeyWindow 子类
-        Class originalClass = object_getClass(bubbleWin);
-        const char *subclassName = "ShijimaBubbleNonActivatingNSWindow";
-        Class subclass = objc_getClass(subclassName);
-        if (!subclass) {
-            subclass = objc_allocateClassPair(originalClass, subclassName, 0);
-            if (subclass) {
-                class_addMethod(subclass, @selector(canBecomeKeyWindow), (IMP)NeverBecomeKey, "c@:");
-                class_addMethod(subclass, @selector(canBecomeMainWindow), (IMP)NeverBecomeMain, "c@:");
-                objc_registerClassPair(subclass);
-            }
-        }
-        if (subclass) {
-            object_setClass(bubbleWin, subclass);
-        }
-    }
-#elif defined(_WIN32)
-    HWND hwnd = (HWND)winId();
-    if (hwnd) {
-        LONG_PTR exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
-        exStyle |= (WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE);
-        SetWindowLongPtr(hwnd, GWL_EXSTYLE, exStyle);
-    }
-#endif
-
+    Platform::setupFloatingBubbleWindow(this);
 
     auto mainLayout = new QVBoxLayout(this);
+
     mainLayout->setContentsMargins(18, 14, 18, 14);
     mainLayout->setSpacing(8);
 
@@ -505,80 +446,9 @@ void MessageBubble::openAppTarget()
     if (m_appTarget.trimmed().isEmpty()) return;
 
     QString target = m_appTarget.trimmed();
-    bool launched = false;
     std::cout << "[应用唤醒] 准备打开目标: " << target.toStdString() << std::endl;
-
-#if defined(__APPLE__)
-    NSString *nsTarget = target.toNSString();
-
-    // 1. 如果是 URL 链接或自定义协议 (如 https://, vscode://, weixin://)
-    if (target.contains("://")) {
-        NSURL *url = [NSURL URLWithString:nsTarget];
-        if (url) {
-            launched = [[NSWorkspace sharedWorkspace] openURL:url];
-        }
-    }
-
-    // 2. 如果是 Bundle ID (例如 com.apple.Safari, com.tencent.xinWeChat, com.microsoft.VSCode)
-    if (!launched) {
-        NSURL *appUrl = [[NSWorkspace sharedWorkspace] URLForApplicationWithBundleIdentifier:nsTarget];
-        if (appUrl != nil) {
-            NSWorkspaceOpenConfiguration *config = [NSWorkspaceOpenConfiguration configuration];
-            config.activates = YES;
-            [[NSWorkspace sharedWorkspace] openApplicationAtURL:appUrl configuration:config completionHandler:nil];
-            launched = true;
-        }
-    }
-
-    // 3. 如果是本地 .app 完整路径 (例如 /Applications/Safari.app)
-    if (!launched && (target.endsWith(".app", Qt::CaseInsensitive) || target.startsWith("/"))) {
-        NSURL *appUrl = [NSURL fileURLWithPath:nsTarget];
-        if (appUrl != nil) {
-            NSWorkspaceOpenConfiguration *config = [NSWorkspaceOpenConfiguration configuration];
-            config.activates = YES;
-            [[NSWorkspace sharedWorkspace] openApplicationAtURL:appUrl configuration:config completionHandler:nil];
-            launched = true;
-        }
-    }
-
-    // 4. 尝试以应用名称查找完整路径启动
-    if (!launched) {
-        NSString *fullPath = [[NSWorkspace sharedWorkspace] fullPathForApplication:nsTarget];
-        if (fullPath != nil) {
-            NSURL *appUrl = [NSURL fileURLWithPath:fullPath];
-            if (appUrl != nil) {
-                NSWorkspaceOpenConfiguration *config = [NSWorkspaceOpenConfiguration configuration];
-                config.activates = YES;
-                [[NSWorkspace sharedWorkspace] openApplicationAtURL:appUrl configuration:config completionHandler:nil];
-                launched = true;
-            }
-        }
-    }
-
-    // 5. 兜底使用 macOS open 命令启动
-    if (!launched) {
-        if (target.endsWith(".app", Qt::CaseInsensitive) || target.startsWith("/")) {
-            QProcess::startDetached("open", QStringList() << target);
-        } else if (target.contains(".") && !target.contains(" ")) {
-            QProcess::startDetached("open", QStringList() << "-b" << target);
-        } else {
-            QProcess::startDetached("open", QStringList() << "-a" << target);
-        }
-        launched = true;
-    }
-#elif defined(_WIN32)
-    if (target.contains("://") || target.startsWith("http", Qt::CaseInsensitive)) {
-        launched = QDesktopServices::openUrl(QUrl::fromUserInput(target));
-    } else {
-        HINSTANCE hInst = ShellExecuteW(NULL, L"open", reinterpret_cast<const wchar_t*>(target.utf16()), NULL, NULL, SW_SHOWNORMAL);
-        launched = ((INT_PTR)hInst > 32);
-    }
-#else
-    launched = QDesktopServices::openUrl(QUrl::fromUserInput(target));
-#endif
-
+    bool launched = Platform::openTargetApp(target);
     std::cout << "[应用唤醒] 应用启动完成: " << target.toStdString() << " (成功: " << (launched ? "是" : "否") << ")" << std::endl;
-
 
     if (m_openAppBtn) {
         static_cast<IconCardButton*>(m_openAppBtn)->setText("已打开 ✅");
@@ -589,6 +459,7 @@ void MessageBubble::openAppTarget()
         });
     }
 }
+
 
 void MessageBubble::showMessage(QString const& text, int duration, QString const& appTarget)
 {

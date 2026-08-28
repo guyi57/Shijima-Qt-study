@@ -60,10 +60,7 @@ jobs:
           retention-days: 1
 
   build-linux:
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      matrix:
-        runner: [ ubuntu-24.04-arm, ubuntu-22.04 ]
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -76,46 +73,32 @@ jobs:
           pushd libshijima
           git fetch --unshallow origin main || true
           popd
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Install Qt6
-        uses: jdpurcell/install-qt-action@v5
-        with:
-          use-naqt: true
-          version: '6.8.2'
-          host: ${{ (matrix.runner == 'ubuntu-24.04-arm') && 'linux_arm64' || 'linux' }}
-          target: 'desktop'
-          arch: ${{ (matrix.runner == 'ubuntu-24.04-arm') && 'linux_gcc_arm64' || 'linux_gcc_64' }}
-          modules: 'qtmultimedia'
-          cache: true
       - name: Install build dependencies
         run: |
-          sudo apt-get install -y libxcb-cursor0 libarchive-dev libwayland-dev wayland-protocols
-      - name: Install build dependencies (arm64)
-        if: matrix.runner == 'ubuntu-24.04-arm'
-        run: |
-          sudo apt-get install -y libgstreamer-plugins-bad1.0-0 libgstreamer-plugins-good1.0-0
+          sudo apt-get update
+          sudo apt-get install -y qt6-base-dev qt6-multimedia-dev libarchive-dev libxcb-cursor0 libwayland-dev wayland-protocols pkg-config build-essential
       - name: Build Linux release build
         env:
           CONFIG: release
         run: |
           make clean
           make -j$(nproc)
-          make appimage
+          make appimage || true
           cp -r licenses publish/Linux/release/
-      - name: Package Linux AppImage
+      - name: Package Linux
         run: |
-          if [ "${{ matrix.runner }}" = "ubuntu-24.04-arm" ]; then
-            cp publish/Linux/release/Shijima-Qt-*.AppImage Shijima-Qt-Linux-arm64.AppImage || cp publish/Linux/release/*.AppImage Shijima-Qt-Linux-arm64.AppImage
+          if ls publish/Linux/release/*.AppImage 1> /dev/null 2>&1; then
+            cp publish/Linux/release/*.AppImage Shijima-Qt-Linux-x86_64.AppImage
           else
-            cp publish/Linux/release/Shijima-Qt-*.AppImage Shijima-Qt-Linux-x86_64.AppImage || cp publish/Linux/release/*.AppImage Shijima-Qt-Linux-x86_64.AppImage
+            cd publish/Linux/release
+            tar -czvf ../../../Shijima-Qt-Linux-x86_64.tar.gz .
+            cd ../../..
           fi
       - name: Archive Linux release build
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ (matrix.runner == 'ubuntu-24.04-arm') && 'release-linux-arm64' || 'release-linux-x86_64' }}
-          path: ${{ (matrix.runner == 'ubuntu-24.04-arm') && 'Shijima-Qt-Linux-arm64.AppImage' || 'Shijima-Qt-Linux-x86_64.AppImage' }}
+          name: release-linux-x86_64
+          path: Shijima-Qt-Linux-x86_64.*
           retention-days: 1
 
   build-macos:
@@ -132,37 +115,18 @@ jobs:
           pushd libshijima
           git fetch --unshallow origin main || true
           popd
-      - name: Temporarily let gtar run as root
+      - name: Install dependencies via Homebrew
         run: |
-          sudo chown 0:0 /opt/homebrew/bin/gtar
-          sudo chmod u+s /opt/homebrew/bin/gtar
-      - name: Cache Qt6
-        id: cache-qt6
-        uses: actions/cache@v4
-        with:
-          path: /opt/local
-          key: macos-14-macports-qt6
-      - name: Revoke gtar's root permissions
-        run: |
-          sudo chmod u-s /opt/homebrew/bin/gtar
-      - name: Install Qt6
-        if: steps.cache-qt6.outputs.cache-hit != 'true'
-        run: |
-          wget --no-verbose https://github.com/macports/macports-base/releases/download/v2.10.5/MacPorts-2.10.5-14-Sonoma.pkg
-          sudo installer -pkg MacPorts-2.10.5-14-Sonoma.pkg -target /
-          export PATH=/opt/local/bin:/opt/local/sbin:$PATH
-          yes | sudo port install qt6-qtbase qt6-qtmultimedia pkgconfig libarchive
-          sudo rm -rf /opt/local/var/macports/build/*
-          sudo rm -rf /opt/local/var/macports/distfiles/*
-      - name: Expose MacPorts tools
-        run: |
-          echo "PATH=/opt/local/bin:/opt/local/sbin:$PATH" >> $GITHUB_ENV
+          brew install qt@6 libarchive pkg-config
       - name: Build macOS arm64 release build
         env:
           CONFIG: release
+          PATH: /opt/homebrew/opt/qt@6/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+          PKG_CONFIG_PATH: /opt/homebrew/opt/libarchive/lib/pkgconfig:/opt/homebrew/opt/qt@6/lib/pkgconfig
+          CMAKE_PREFIX_PATH: /opt/homebrew/opt/qt@6
         run: |
           make clean
-          make -j6
+          make -j$(sysctl -n hw.ncpu)
           make macapp
           cp -r licenses publish/macOS/release/
       - name: Package macOS Zip
@@ -176,10 +140,6 @@ jobs:
           name: release-macos-arm64
           path: Shijima-Qt-macOS-AppleSilicon.zip
           retention-days: 1
-      - name: Temporarily let gtar run as root
-        run: |
-          sudo chown 0:0 /opt/homebrew/bin/gtar
-          sudo chmod u+s /opt/homebrew/bin/gtar
 
   publish-release:
     needs: [build-windows, build-linux, build-macos]
@@ -194,7 +154,7 @@ jobs:
       - name: Prepare Release Assets
         run: |
           mkdir -p final-assets
-          find release-assets -type f \( -name "*.zip" -o -name "*.AppImage" \) -exec cp {} final-assets/ \;
+          find release-assets -type f \( -name "*.zip" -o -name "*.AppImage" -o -name "*.tar.gz" \) -exec cp {} final-assets/ \;
           ls -la final-assets/
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

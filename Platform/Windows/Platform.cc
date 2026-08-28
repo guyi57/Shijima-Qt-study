@@ -20,6 +20,11 @@
 #include <QWidget>
 #include <windows.h>
 
+#include <QDesktopServices>
+#include <QUrl>
+#include <QFileInfo>
+#include <shellapi.h>
+
 namespace Platform {
 
 void initialize(int argc, char **argv) {
@@ -36,8 +41,55 @@ void showOnAllDesktops(QWidget *widget) {
     }
 }
 
+void setupFloatingBubbleWindow(QWidget *widget) {
+    HWND hwnd = (HWND)widget->winId();
+    if (hwnd) {
+        LONG_PTR exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
+        exStyle |= (WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE);
+        SetWindowLongPtr(hwnd, GWL_EXSTYLE, exStyle);
+    }
+}
+
+bool isAppFrontmost(const QString &appTarget) {
+    if (appTarget.trimmed().isEmpty()) return false;
+
+    HWND foreground = GetForegroundWindow();
+    if (foreground) {
+        DWORD pid = 0;
+        GetWindowThreadProcessId(foreground, &pid);
+        HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+        if (hProc) {
+            wchar_t exePath[MAX_PATH] = {0};
+            DWORD size = MAX_PATH;
+            if (QueryFullProcessImageNameW(hProc, 0, exePath, &size)) {
+                QString fullPath = QString::fromWCharArray(exePath);
+                QString baseName = QFileInfo(fullPath).baseName();
+                CloseHandle(hProc);
+                if (baseName.compare(appTarget.trimmed(), Qt::CaseInsensitive) == 0 ||
+                    appTarget.contains(baseName, Qt::CaseInsensitive)) {
+                    return true;
+                }
+            }
+            CloseHandle(hProc);
+        }
+    }
+    return false;
+}
+
+bool openTargetApp(const QString &appTarget) {
+    if (appTarget.trimmed().isEmpty()) return false;
+
+    QString target = appTarget.trimmed();
+    if (target.contains("://") || target.startsWith("http", Qt::CaseInsensitive)) {
+        return QDesktopServices::openUrl(QUrl::fromUserInput(target));
+    }
+    HINSTANCE hInst = ShellExecuteW(NULL, L"open", reinterpret_cast<const wchar_t*>(target.utf16()), NULL, NULL, SW_SHOWNORMAL);
+    return ((INT_PTR)hInst > 32);
+}
+
 bool useWindowMasks() {
     return false;
 }
 
 }
+

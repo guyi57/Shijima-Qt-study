@@ -1,4 +1,5 @@
 #include "ScoreBadgeWidget.hpp"
+#include "Platform/Platform.hpp"
 #include <QPainter>
 #include <QPainterPath>
 #include <QParallelAnimationGroup>
@@ -6,67 +7,10 @@
 #include <QEasingCurve>
 #include <QFont>
 #include <QGuiApplication>
-#include <QFileInfo>
-
-#if defined(__APPLE__)
-#import <AppKit/AppKit.h>
-#elif defined(_WIN32)
-#include <windows.h>
-#endif
 
 bool Platform_isAppFrontmost(QString const& appTarget)
 {
-    if (appTarget.trimmed().isEmpty()) return false;
-
-#if defined(__APPLE__)
-    @autoreleasepool {
-        NSRunningApplication *frontApp = [[NSWorkspace sharedWorkspace] frontmostApplication];
-        if (!frontApp) return false;
-
-        NSString *bundleId = [frontApp bundleIdentifier];
-        NSString *appName = [frontApp localizedName];
-        QString target = appTarget.trimmed();
-
-        if (bundleId != nil) {
-            QString curBundle = QString::fromNSString(bundleId);
-            if (curBundle.compare(target, Qt::CaseInsensitive) == 0) {
-                return true;
-            }
-        }
-        if (appName != nil) {
-            QString curName = QString::fromNSString(appName);
-            if (curName.compare(target, Qt::CaseInsensitive) == 0) {
-                return true;
-            }
-            if ((target.contains("antigravity-ide", Qt::CaseInsensitive) || target.contains("Antigravity IDE"))
-                && curName.contains("Antigravity", Qt::CaseInsensitive)) {
-                return true;
-            }
-        }
-    }
-#elif defined(_WIN32)
-    HWND foreground = GetForegroundWindow();
-    if (foreground) {
-        DWORD pid = 0;
-        GetWindowThreadProcessId(foreground, &pid);
-        HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-        if (hProc) {
-            wchar_t exePath[MAX_PATH] = {0};
-            DWORD size = MAX_PATH;
-            if (QueryFullProcessImageNameW(hProc, 0, exePath, &size)) {
-                QString fullPath = QString::fromWCharArray(exePath);
-                QString baseName = QFileInfo(fullPath).baseName();
-                CloseHandle(hProc);
-                if (baseName.compare(appTarget.trimmed(), Qt::CaseInsensitive) == 0 ||
-                    appTarget.contains(baseName, Qt::CaseInsensitive)) {
-                    return true;
-                }
-            }
-            CloseHandle(hProc);
-        }
-    }
-#endif
-    return false;
+    return Platform::isAppFrontmost(appTarget);
 }
 
 ScoreBadgeWidget::ScoreBadgeWidget(QWidget *parent)
@@ -77,28 +21,7 @@ ScoreBadgeWidget::ScoreBadgeWidget(QWidget *parent)
     setAttribute(Qt::WA_DeleteOnClose);
     setFocusPolicy(Qt::NoFocus);
 
-#if defined(__APPLE__)
-    NSView *badgeView = (__bridge NSView *)((void *)winId());
-    NSWindow *badgeWin = [badgeView window];
-    if (badgeWin != nil) {
-        NSWindowCollectionBehavior behavior = [badgeWin collectionBehavior];
-        behavior &= ~NSWindowCollectionBehaviorMoveToActiveSpace;
-        behavior |= (NSWindowCollectionBehaviorCanJoinAllSpaces |
-                     NSWindowCollectionBehaviorStationary |
-                     NSWindowCollectionBehaviorIgnoresCycle);
-        [badgeWin setCollectionBehavior:behavior];
-        [badgeWin setLevel:NSFloatingWindowLevel];
-        [badgeWin setHidesOnDeactivate:NO];
-    }
-#elif defined(_WIN32)
-    HWND hwnd = (HWND)winId();
-    if (hwnd) {
-        LONG_PTR exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
-        exStyle |= (WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE);
-        SetWindowLongPtr(hwnd, GWL_EXSTYLE, exStyle);
-    }
-#endif
-
+    Platform::setupFloatingBubbleWindow(this);
 
     m_opacityEffect = new QGraphicsOpacityEffect(this);
     setGraphicsEffect(m_opacityEffect);

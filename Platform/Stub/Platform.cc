@@ -22,8 +22,12 @@ namespace Platform {
 
 void initialize(int argc, char **argv) {}
 void showOnAllDesktops(QWidget *widget) {}
+void setupFloatingBubbleWindow(QWidget *widget) {}
+bool isAppFrontmost(const QString &appTarget) { Q_UNUSED(appTarget); return false; }
+bool openTargetApp(const QString &appTarget) { Q_UNUSED(appTarget); return false; }
 bool useWindowMasks() {
     return false;
 }
+
 
 }

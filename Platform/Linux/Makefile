@@ -6,14 +6,9 @@ SOURCES = Platform.cc ActiveWindowObserver.cc KWin.cc PrivateActiveWindowObserve
 QT_LIBS = Core DBus Widgets
 
 define bin2c
-echo "#include <stddef.h>" > $(2)
-echo "static const char $(2:.c=)[] = " >> $(2)
-hexdump -v -e '16/1 "_x%02X" "\n"' < $(1) | sed 's/_/\\/g; s/\\x  //g; s/.*/    "&"/' >> $(2)
-echo ";" >> $(2)
-echo -n "static const size_t $(2:.c=)_len = " >> $(2)
-wc -c < $(1) >> $(2)
-echo ";" >> $(2)
+python3 -c 'import sys, os; f=open(sys.argv[1], "rb"); d=f.read(); var=os.path.splitext(os.path.basename(sys.argv[2]))[0]; hex_lines=["    \"" + "".join(fr"\x{b:02X}" for b in d[i:i+16]) + "\"" for i in range(0, len(d), 16)]; out=open(sys.argv[2], "w"); out.write("#include <stddef.h>\nstatic const char " + var + "[] = \n" + "\n".join(hex_lines) + "\n;\nstatic const size_t " + var + "_len = " + str(len(d)) + ";\n")' $(1) $(2)
 endef
+
 
 all:: Linux.a
 

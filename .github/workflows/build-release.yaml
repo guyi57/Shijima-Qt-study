@@ -60,7 +60,8 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake git qt6-base-dev qt6-multimedia-dev libarchive-dev libx11-dev libsqlite3-dev libxcb-cursor0 libwayland-dev wayland-protocols pkg-config build-essential libgl1-mesa-dev libxkbcommon-dev bsdextrautils
+          sudo apt-get install -y zip unzip cmake git qt6-base-dev qt6-multimedia-dev libarchive-dev libx11-dev libsqlite3-dev libxcb-cursor0 libwayland-dev wayland-protocols pkg-config build-essential libgl1-mesa-dev libxkbcommon-dev bsdextrautils
+
       - name: Build Linux release build
         env:
           CONFIG: release

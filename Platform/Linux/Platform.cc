@@ -126,10 +126,15 @@ void initialize(int argc, char **argv) {
     setenv("WAYLAND_DISPLAY", "", 1);
 }
 
+#include <QtGui/QGuiApplication>
+
 void showOnAllDesktops(QWidget *widget) {
+    if (!widget) return;
     unsigned long data = 0xFFFFFFFF;
-    QNativeInterface::QX11Application *x11App = qApp->nativeInterface<QNativeInterface::QX11Application>();
+    auto *x11App = qApp->nativeInterface<QNativeInterface::QX11Application>();
+    if (!x11App) return;
     Display *displayID = x11App->display();
+    if (!displayID) return;
     WId windowID = widget->winId();
     XChangeProperty(displayID, windowID,
         XInternAtom(displayID, "_NET_WM_DESKTOP", False),
@@ -157,6 +162,7 @@ void showOnAllDesktops(QWidget *widget) {
         XFlush(displayID);
     }
 }
+
 
 #include <QDesktopServices>
 #include <QUrl>

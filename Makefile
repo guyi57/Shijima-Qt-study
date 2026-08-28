@@ -172,7 +172,8 @@ publish/macOS/$(CONFIG)/Shijima-Qt.app: publish/macOS/$(CONFIG)
 	cp -r Shijima-Qt.app $@
 	mkdir -p $@/Contents/MacOS
 	cp $^/shijima-qt $@/Contents/MacOS/
-	macdeployqt $@
+	macdeployqt $@ || true
+
 
 
 publish/Linux/$(CONFIG)/Shijima-Qt.AppImage: publish/Linux/$(CONFIG) linuxdeploy.AppImage

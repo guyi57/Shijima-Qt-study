@@ -66,13 +66,16 @@ ifeq ($(PLATFORM),macOS)
 endif
 
 ifeq ($(PLATFORM),macOS)
-	QT_MACOS_PATH ?= /opt/homebrew/opt/qt$(QT_VERSION)/lib
-	ifeq ($(wildcard $(QT_MACOS_PATH)),)
-		QT_MACOS_PATH := /opt/local/libexec/qt$(QT_VERSION)/lib
-	endif
+	QT_MACOS_PATH ?= $(shell \
+		if [ -d "/opt/homebrew/opt/qt@$(QT_VERSION)/lib" ]; then echo "/opt/homebrew/opt/qt@$(QT_VERSION)/lib"; \
+		elif [ -d "/opt/homebrew/opt/qt$(QT_VERSION)/lib" ]; then echo "/opt/homebrew/opt/qt$(QT_VERSION)/lib"; \
+		elif [ -d "/opt/homebrew/opt/qt/lib" ]; then echo "/opt/homebrew/opt/qt/lib"; \
+		elif [ -d "/opt/local/libexec/qt$(QT_VERSION)/lib" ]; then echo "/opt/local/libexec/qt$(QT_VERSION)/lib"; \
+		else echo "/opt/homebrew/opt/qt$(QT_VERSION)/lib"; fi)
 	QT_FRAMEWORKS = $(addsuffix .framework,$(addprefix -I$(QT_MACOS_PATH)/Qt,$(QT_LIBS)))
 	QT_CFLAGS = -F$(QT_MACOS_PATH) $(addsuffix /Versions/Current/Headers,$(QT_FRAMEWORKS))
 	QT_LDFLAGS = -F$(QT_MACOS_PATH) $(addprefix -framework Qt,$(QT_LIBS))
+
 else
 	PREFIXED_QT_LIBS = $(addprefix Qt$(QT_VERSION),$(QT_LIBS))
 	QT_CFLAGS = $(shell [ -z "$(QT_LIBS)" ] || $(PKG_CONFIG) --cflags $(PREFIXED_QT_LIBS))

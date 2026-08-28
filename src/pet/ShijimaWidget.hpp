@@ -22,6 +22,8 @@
 #include <memory>
 #include <QRegion>
 #include <QTimer>
+#include <QVariantAnimation>
+#include <QEasingCurve>
 #include "Asset.hpp"
 #include "SoundEffectManager.hpp"
 #include <shijima/mascot/manager.hpp>
@@ -29,6 +31,7 @@
 #include "PlatformWidget.hpp"
 #include "MascotData.hpp"
 #include "MessageBubble.hpp"
+#include "PetAction.hpp"
 
 class QPushButton;
 class QPaintEvent;
@@ -36,6 +39,10 @@ class QMouseEvent;
 class QCloseEvent;
 class ShijimaContextMenu;
 class ShimejiInspectorDialog;
+class SelectionToolbar;
+class AskDialog;
+class AgentSettingsDialog;
+class PetStatusBarWidget;
 
 class ShijimaWidget : public PlatformWidget<QWidget>
 {
@@ -50,6 +57,7 @@ public:
     bool pointInside(QPoint const& point);
     int mascotId() { return m_mascotId; }
     void showInspector();
+    void showAgentSettings();
     void markForDeletion() { m_markedForDeletion = true; }
     bool inspectorVisible();
     bool paused() const { return m_paused || m_contextMenuVisible; }
@@ -68,15 +76,36 @@ public:
     QString const& mascotName() {
         return m_data->name();
     }
-    void showMessage(QString const& text, int duration = 0);
+    void showMessage(QString const& text, int duration = 0, QString const& appTarget = "", bool moveToCenter = false);
     void hideMessage();
+
+    // 执行高阶动作指令
+    void doAction(const PetActionCommand &cmd);
+
+    // 查询当前行为与导航至角落
+    QString currentBehaviorName() const;
+    void moveToCorner(bool toLeftCorner);
+
+    // 划词操作与提问响应
+    void onTranslateRequested(QString const& text);
+    void onAskRequested(QString const& text);
+    void onQuestionSubmitted(QString const& context, QString const& question);
+    void showMessageHistory();
+    void showTimerManager();
+    void setWaitingForAgent(bool waiting);
+    bool isWaitingForAgent() const { return m_isWaitingForAgent; }
+    MessageBubble *messageBubble() const { return m_messageBubble; }
+
     ~ShijimaWidget();
 protected:
     void paintEvent(QPaintEvent *) override;
     void mousePressEvent(QMouseEvent *) override;
+    void mouseMoveEvent(QMouseEvent *) override;
     void mouseReleaseEvent(QMouseEvent *) override;
 private:
     void setDragTarget(ShijimaWidget *target);
+    void snapToNearestBorderOrWindow();
+    bool checkAndJumpToActiveIE();
     bool isMirroredRender() const;
     void closeAction();
     void contextMenuClosed(QCloseEvent *);
@@ -105,4 +134,36 @@ private:
     bool m_markedForDeletion = false;
     int m_mascotId;
     MessageBubble *m_messageBubble;
+    QVariantAnimation *m_moveAnimation = nullptr;
+    QString m_pendingMessageText;
+    int m_pendingMessageDuration = 0;
+    QString m_pendingAppTarget;
+    bool m_isRunningToCenter = false;
+    bool m_isWaitingForAgent = false;
+
+    // 划词操作栏、提问弹窗、配置窗口与定时器窗口
+    SelectionToolbar *m_selectionToolbar = nullptr;
+    AskDialog *m_askDialog = nullptr;
+    AgentSettingsDialog *m_settingsDialog = nullptr;
+    class TimerListDialog *m_timerDialog = nullptr;
+
+    // 拖拽瞬时速度物理采样与抛物线动力学控制器
+    void applyThrowPhysics(double vx, double vy);
+    QPoint m_lastMousePos;
+    qint64 m_lastMouseMoveTime = 0;
+    double m_dragVelocityX = 0.0;
+    double m_dragVelocityY = 0.0;
+    QTimer *m_throwPhysicsTimer = nullptr;
+    double m_throwVx = 0.0;
+    double m_throwVy = 0.0;
+    bool m_isThrowFlying = false;
+
+    // 动作意图打断与小脾气感知
+    enum class PetInterruptedGoal { None, ClimbingCeiling, JumpingWindow, StandingOnWindow, Breeding, RunningFast };
+    PetInterruptedGoal detectCurrentGoal();
+    void triggerTantrum(PetInterruptedGoal goal);
+    void checkWindowVanished();
+    PetInterruptedGoal m_interruptedGoal = PetInterruptedGoal::None;
+    bool m_wasOnWindow = false;
+    qint64 m_lastTantrumTime = 0;
 };

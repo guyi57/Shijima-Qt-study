@@ -1,0 +1,58 @@
+#pragma once
+
+// 
+// Shijima-Qt - AI Model, Memory, Agent & Hotkey Settings Dialog
+// 
+
+#include <QDialog>
+#include <QLineEdit>
+#include <QSpinBox>
+#include <QComboBox>
+#include <QPushButton>
+#include <QLabel>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+
+class AgentSettingsDialog : public QDialog
+{
+public:
+    explicit AgentSettingsDialog(QWidget *parent = nullptr);
+    void refreshValues();
+
+private:
+    void applyPreset(int index);
+    void saveAndClose();
+    void testConnection();
+    void testAipyConnection();
+    void autoDetectAipyKey();
+
+    // 基础模型配置
+    QComboBox *m_presetCombo;
+    QLineEdit *m_apiBaseEdit;
+    QLineEdit *m_apiKeyEdit;
+    QLineEdit *m_modelEdit;
+    QSpinBox *m_memoryTurnsSpin;
+    QLineEdit *m_hotkeyTranslateEdit;
+    QLineEdit *m_hotkeyAskEdit;
+    QLineEdit *m_hotkeyMusicToggleEdit;
+    QLineEdit *m_hotkeyMusicPlayPauseEdit;
+    QLineEdit *m_hotkeyMusicNextEdit;
+    QLineEdit *m_hotkeyMusicPrevEdit;
+    QLineEdit *m_hotkeyMusicFavEdit;
+
+    QPushButton *m_testBtn;
+    QLabel *m_testStatusLabel;
+
+    // 智能体 Agent 适配器配置
+    QComboBox *m_agentTypeCombo;
+    QComboBox *m_routingModeCombo;
+    QLineEdit *m_aipyBaseEdit;
+    QLineEdit *m_aipyKeyEdit;
+    QPushButton *m_autoDetectKeyBtn;
+    QPushButton *m_testAipyBtn;
+    QLabel *m_agentStatusLabel;
+
+    QPushButton *m_clearMemoryBtn;
+    QPushButton *m_saveBtn;
+    QPushButton *m_cancelBtn;
+};

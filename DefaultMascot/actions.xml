@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="UTF-8" ?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <Mascot xmlns="http://www.group-finity.com/Mascot" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://www.group-finity.com/Mascot Mascot.xsd">
 
@@ -10,7 +10,7 @@
 
 		<Action Name="Stand" Type="Stay" BorderType="Floor">
 			<Animation>
-				<Pose Image="/shime1.png" ImageAnchor="64,128" Velocity="0,0" Duration="250" />
+				<Pose Image="/shime1.png" ImageAnchor="64,128" Velocity="0,0" Duration="40" />
 			</Animation>
 		</Action>
 

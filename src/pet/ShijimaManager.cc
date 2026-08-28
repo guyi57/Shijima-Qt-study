@@ -39,6 +39,11 @@
 #include "ShijimaLicensesDialog.hpp"
 #include "ShijimaApiDialog.hpp"
 #include "ShijimaWidget.hpp"
+#include "HotkeyManager.hpp"
+#include "AgentService.hpp"
+#include "BehaviorEngine.hpp"
+#include "MusicPlayerDialog.hpp"
+#include "MusicPlayerManager.hpp"
 #include <QDirIterator>
 #include <QDesktopServices>
 #include <shijima/mascot/factory.hpp>
@@ -633,7 +638,75 @@ void ShijimaManager::screenRemoved(QScreen *screen) {
     }
 }
 
+void ShijimaManager::updateGlobalHotkeys() {
+    auto cfg = AgentService::instance()->config();
+    QString hkTranslate = cfg.hotkeyTranslate.isEmpty() ? "Option+T" : cfg.hotkeyTranslate;
+    QString hkAsk = cfg.hotkeyAsk.isEmpty() ? "Option+Q" : cfg.hotkeyAsk;
+
+    HotkeyManager::instance()->registerTranslateHotkey(hkTranslate, [this]() {
+        ShijimaWidget *target = BehaviorEngine::instance()->activeWidget();
+        if (target == nullptr) {
+            if (!m_mascots.empty()) target = m_mascots.front();
+        }
+        if (target != nullptr) {
+            QString text = HotkeyManager::instance()->getActiveSelectedText();
+            if (text.isEmpty()) {
+                target->showMessage("💡 请先划选文字，再按快捷键翻译～", 3500);
+            } else {
+                target->onTranslateRequested(text);
+            }
+        }
+    });
+
+    HotkeyManager::instance()->registerAskHotkey(hkAsk, [this]() {
+        ShijimaWidget *target = BehaviorEngine::instance()->activeWidget();
+        if (target == nullptr) {
+            if (!m_mascots.empty()) target = m_mascots.front();
+        }
+        if (target != nullptr) {
+            QString text = HotkeyManager::instance()->getActiveSelectedText();
+            target->onAskRequested(text);
+        }
+    });
+
+    QString hkMusicToggle = cfg.hotkeyMusicToggle.isEmpty() ? "Option+M" : cfg.hotkeyMusicToggle;
+    QString hkMusicPlayPause = cfg.hotkeyMusicPlayPause.isEmpty() ? "Option+Space" : cfg.hotkeyMusicPlayPause;
+    QString hkMusicNext = cfg.hotkeyMusicNext.isEmpty() ? "Option+Right" : cfg.hotkeyMusicNext;
+    QString hkMusicPrev = cfg.hotkeyMusicPrev.isEmpty() ? "Option+Left" : cfg.hotkeyMusicPrev;
+    QString hkMusicFav = cfg.hotkeyMusicFav.isEmpty() ? "Option+L" : cfg.hotkeyMusicFav;
+
+    // 音乐播放器全局热键 (打开独立窗口 / 播放暂停 / 下一首 / 上一首 / 一键收藏)
+    HotkeyManager::instance()->registerMusicToggleHotkey(hkMusicToggle, []() {
+        MusicPlayerDialog::instance()->toggleVisibility();
+    });
+
+    HotkeyManager::instance()->registerMusicPlayPauseHotkey(hkMusicPlayPause, []() {
+        MusicPlayerManager::instance()->togglePlay();
+    });
+
+    HotkeyManager::instance()->registerMusicNextHotkey(hkMusicNext, []() {
+        MusicPlayerManager::instance()->playNext();
+    });
+
+    HotkeyManager::instance()->registerMusicPrevHotkey(hkMusicPrev, []() {
+        MusicPlayerManager::instance()->playPrevious();
+    });
+
+    HotkeyManager::instance()->registerMusicFavHotkey(hkMusicFav, []() {
+        MusicPlayerManager::instance()->toggleFavoriteCurrent();
+        ShijimaWidget *target = BehaviorEngine::instance()->activeWidget();
+        if (target != nullptr) {
+            bool isFav = MusicPlayerManager::instance()->isCurrentSongFavorite();
+            auto song = MusicPlayerManager::instance()->currentSong();
+            if (!song.name.isEmpty()) {
+                target->showMessage(isFav ? QString("❤️ 已收藏《%1》～").arg(song.name) : QString("🤍 已取消收藏《%1》").arg(song.name), 2500);
+            }
+        }
+    });
+}
+
 ShijimaManager::~ShijimaManager() {
+    HotkeyManager::instance()->unregisterAll();
     disconnect(qApp, &QGuiApplication::screenAdded,
         this, &ShijimaManager::screenAdded);
     disconnect(qApp, &QGuiApplication::screenRemoved,
@@ -757,6 +830,7 @@ ShijimaManager::ShijimaManager(QWidget *parent):
     buildToolbar();
 
     m_httpApi.start("127.0.0.1", 32456);
+    updateGlobalHotkeys();
 }
 
 void ShijimaManager::itemDoubleClicked(QListWidgetItem *qItem) {
@@ -863,11 +937,22 @@ void ShijimaManager::updateEnvironment(QScreen *screen) {
         env->active_ie = { -50, -50, -50, -50 };
     }
     int x = cursor.x(), y = cursor.y();
-    env->cursor = { (double)x, (double)y, x - env->cursor.x, y - env->cursor.y };
+    if (m_throwImpulseTicks > 0) {
+        env->cursor = { (double)x, (double)y, m_throwImpulseDx, m_throwImpulseDy };
+        m_throwImpulseTicks--;
+    } else {
+        env->cursor = { (double)x, (double)y, x - env->cursor.x, y - env->cursor.y };
+    }
     env->subtick_count = SHIJIMAQT_SUBTICK_COUNT;
     m_previousWindow = m_currentWindow;
 
     env->set_scale(1.0 / std::sqrt(m_userScale));
+}
+
+void ShijimaManager::setThrowImpulse(double dx, double dy) {
+    m_throwImpulseDx = dx;
+    m_throwImpulseDy = dy;
+    m_throwImpulseTicks = 6;
 }
 
 void ShijimaManager::updateEnvironment() {

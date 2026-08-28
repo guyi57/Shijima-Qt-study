@@ -27,9 +27,17 @@ void initialize(int argc, char **argv) {}
 void showOnAllDesktops(QWidget *widget) {
     NSView *view = (__bridge NSView *)((void *)widget->winId());
     NSWindow *window = [view window];
-    [window setCollectionBehavior:[window collectionBehavior] |
-        NSWindowCollectionBehaviorFullScreenAuxiliary |
-        NSWindowCollectionBehaviorCanJoinAllSpaces];
+    if (window != nil) {
+        NSWindowCollectionBehavior behavior = [window collectionBehavior];
+        behavior &= ~NSWindowCollectionBehaviorMoveToActiveSpace;
+        behavior |= (NSWindowCollectionBehaviorFullScreenAuxiliary |
+                     NSWindowCollectionBehaviorCanJoinAllSpaces |
+                     NSWindowCollectionBehaviorStationary |
+                     NSWindowCollectionBehaviorIgnoresCycle);
+        [window setCollectionBehavior:behavior];
+        [window setLevel:NSFloatingWindowLevel];
+        [window setHidesOnDeactivate:NO];
+    }
 }
 
 bool useWindowMasks() {
@@ -37,3 +45,4 @@ bool useWindowMasks() {
 }
 
 }
+

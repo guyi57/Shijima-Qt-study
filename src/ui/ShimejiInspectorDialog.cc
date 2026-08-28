@@ -18,6 +18,7 @@
 
 #include "ShimejiInspectorDialog.hpp"
 #include "ShijimaWidget.hpp"
+#include "BehaviorEngine.hpp"
 #include <QFormLayout>
 #include <string>
 #include <QLabel>
@@ -86,6 +87,16 @@ ShimejiInspectorDialog::ShimejiInspectorDialog(ShijimaWidget *parent):
     });
     addRow("Behavior", [](shijima::mascot::manager &mascot){
         return mascot.active_behavior()->name;
+    });
+    addRow("⚡ 体力 (Stamina)", [](shijima::mascot::manager &mascot){
+        const auto &st = BehaviorEngine::instance()->state();
+        return std::to_string(st.stamina) + "%" + (st.isRestingInCorner ? " (角落充能中 💤)" : " (活跃探索中 🌟)");
+    });
+    addRow("😊 心情 (Mood)", [](shijima::mascot::manager &mascot){
+        return std::to_string(BehaviorEngine::instance()->state().mood);
+    });
+    addRow("💕 亲密 (Affection)", [](shijima::mascot::manager &mascot){
+        return std::to_string(BehaviorEngine::instance()->state().affection);
     });
     addRow("Image", [](shijima::mascot::manager &mascot){
         return mascot.state->active_frame.get_name(mascot.state->looking_right);

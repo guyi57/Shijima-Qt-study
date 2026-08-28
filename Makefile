@@ -4,22 +4,43 @@ SHIJIMA_USE_QTMULTIMEDIA ?= 1
 
 PREFIX ?= /usr/local
 
-SOURCES = main.cc \
-	Asset.cc \
-	MascotData.cc \
-	AssetLoader.cc \
-	ForcedProgressDialog.cc \
-	ShijimaContextMenu.cc \
-	ShijimaManager.cc \
-	ShijimaWidget.cc \
-	SoundEffectManager.cc \
-	ShijimaLicensesDialog.cc \
-	ShijimaApiDialog.cc \
-	ShimejiInspectorDialog.cc \
-	DefaultMascot.cc \
-	ShijimaHttpApi.cc \
-	MessageBubble.cc \
-	cli.cc \
+SOURCES = src/main.cc \
+	src/core/Asset.cc \
+	src/core/MascotData.cc \
+	src/core/AssetLoader.cc \
+	src/core/DefaultMascot.cc \
+	src/core/SoundEffectManager.cc \
+	src/core/cli.cc \
+	src/pet/ShijimaManager.cc \
+	src/pet/ShijimaWidget.cc \
+	src/pet/PetEventBus.cc \
+	src/pet/PetMemory.cc \
+	src/pet/BehaviorEngine.cc \
+	src/pet/ReactionEngine.cc \
+	src/pet/InitiativeTrigger.cc \
+	src/agent/AgentService.cc \
+	src/agent/AipyAdapter.cc \
+	src/agent/ShijimaHttpApi.cc \
+	src/music/MusicFavoriteDb.cc \
+	src/music/MusicApiService.cc \
+	src/music/MusicPlayerManager.cc \
+	src/music/MusicPlayerDialog.cc \
+	src/timer/TimerManager.cc \
+	src/timer/TimerListDialog.cc \
+	src/system/HotkeyManager.mm \
+	src/system/SystemObserver.mm \
+	src/ui/MessageBubble.mm \
+	src/ui/ScoreBadgeWidget.mm \
+	src/ui/PetStatusBarWidget.mm \
+	src/ui/SelectionToolbar.cc \
+	src/ui/ShijimaContextMenu.cc \
+	src/ui/AskDialog.cc \
+	src/ui/AgentSettingsDialog.cc \
+	src/ui/MessageHistoryDialog.cc \
+	src/ui/ShimejiInspectorDialog.cc \
+	src/ui/ShijimaApiDialog.cc \
+	src/ui/ShijimaLicensesDialog.cc \
+	src/ui/ForcedProgressDialog.cc \
 	resources.rc
 
 DEFAULT_MASCOT_FILES := $(addsuffix .png,$(addprefix DefaultMascot/img/shime,$(shell seq -s ' ' 1 1 46))) \
@@ -38,11 +59,9 @@ LICENSE_FILES := Shijima-Qt.LICENSE.txt \
 
 LICENSE_FILES := $(addprefix licenses/,$(LICENSE_FILES))
 
-API_DOC_FILES := MESSAGE_API.txt
+API_DOC_FILES := HTTP-API.md
 
-API_DOC_FILES := $(addprefix api_docs/,$(API_DOC_FILES))
-
-QT_LIBS = Widgets Core Gui Concurrent
+QT_LIBS = Widgets Core Gui Concurrent Network
 
 TARGET_LDFLAGS := -Llibshimejifinder/build/unarr -lunarr
 
@@ -56,6 +75,11 @@ ifeq ($(PLATFORM),Windows)
 TARGET_LDFLAGS += -lws2_32
 endif
 
+ifeq ($(PLATFORM),macOS)
+TARGET_LDFLAGS += -L/opt/homebrew/opt/libarchive/lib -larchive -lsqlite3
+CXXFLAGS += -I/opt/homebrew/opt/libarchive/include
+endif
+
 ifeq ($(SHIJIMA_USE_QTMULTIMEDIA),1)
 QT_LIBS += Multimedia
 CXXFLAGS += -DSHIJIMA_USE_QTMULTIMEDIA=1
@@ -63,9 +87,11 @@ else
 CXXFLAGS += -DSHIJIMA_USE_QTMULTIMEDIA=0
 endif
 
-CXXFLAGS += -Ilibshijima -Ilibshimejifinder -Icpp-httplib
+CXXFLAGS += -I. -Isrc -Isrc/core -Isrc/pet -Isrc/agent -Isrc/music -Isrc/timer -Isrc/system -Isrc/ui -Ilibshijima -Ilibshimejifinder -Icpp-httplib
+
 PKG_LIBS += libarchive
 PUBLISH_DLL = $(addprefix Qt6,$(QT_LIBS))
+
 
 define download_linuxdeploy
 @uname_m="$$(uname -m)"; \
@@ -130,7 +156,8 @@ publish/macOS/$(CONFIG)/Shijima-Qt.app: publish/macOS/$(CONFIG)
 	cp -r Shijima-Qt.app $@
 	mkdir -p $@/Contents/MacOS
 	cp $^/shijima-qt $@/Contents/MacOS/
-	/opt/local/libexec/qt6/bin/macdeployqt $@
+	macdeployqt $@
+
 
 publish/Linux/$(CONFIG)/Shijima-Qt.AppImage: publish/Linux/$(CONFIG) linuxdeploy.AppImage
 	rm -rf AppDir
@@ -144,8 +171,8 @@ appimage: publish/Linux/$(CONFIG)/Shijima-Qt.AppImage
 
 macapp: publish/macOS/$(CONFIG)/Shijima-Qt.app
 
-shijima-qt$(EXE): Platform/Platform.a libshimejifinder/build/libshimejifinder.a \
-	libshijima/build/libshijima.a shijima-qt.a
+shijima-qt$(EXE): shijima-qt.a Platform/Platform.a libshimejifinder/build/libshimejifinder.a \
+	libshijima/build/libshijima.a
 	$(CXX) -o $@ $(LD_COPY_NEEDED) $(LD_WHOLE_ARCHIVE) $^ $(LD_NO_WHOLE_ARCHIVE) \
 		$(TARGET_LDFLAGS) $(LDFLAGS)
 	if [ $(CONFIG) = "release" ]; then $(STRIP) $@; fi
@@ -153,19 +180,20 @@ shijima-qt$(EXE): Platform/Platform.a libshimejifinder/build/libshimejifinder.a 
 libshijima/build/libshijima.a: libshijima/build/Makefile
 	$(MAKE) -C libshijima/build
 
-DefaultMascot.cc: $(DEFAULT_MASCOT_FILES) Makefile bundle-default.sh
+src/core/DefaultMascot.cc: $(DEFAULT_MASCOT_FILES) Makefile bundle-default.sh
 	./bundle-default.sh $(DEFAULT_MASCOT_FILES) > '$@-'
 	mv '$@-' '$@'
 
-ShijimaLicensesDialog.cc: licenses_generated.hpp
-	touch ShijimaLicensesDialog.cc
+src/ui/ShijimaLicensesDialog.cc: licenses_generated.hpp
+	touch src/ui/ShijimaLicensesDialog.cc
 
 licenses_generated.hpp: $(LICENSE_FILES) Makefile
-	echo 'static const char *shijima_licenses = R"(' > licenses_generated.hpp
+	echo 'static const char *shijima_licenses = R"SHIJIMA_LIC(' > licenses_generated.hpp
 	echo 'Licenses for the software components used in Shijima-Qt are listed below.' >> licenses_generated.hpp
 	echo '基础项目代码来自：Shijima-Qt ：https://getshijima.app' >> licenses_generated.hpp
 	echo '项目地址 ：https://github.com/guyi57/Shijima-Qt-study' >> licenses_generated.hpp
 	echo '原项目源地址 ：https://github.com/pixelomer/Shijima-Qt/issues' >> licenses_generated.hpp
+	echo '音乐服务出处：GD音乐台 (music.gdstudio.xyz) ：https://music.gdstudio.xyz' >> licenses_generated.hpp
 	for file in $^; do \
 		[ "$$file" != "Makefile" ] || continue; \
 		(echo; echo) >> licenses_generated.hpp; \
@@ -173,18 +201,20 @@ licenses_generated.hpp: $(LICENSE_FILES) Makefile
 		echo >> licenses_generated.hpp; \
 		cat $$file >> licenses_generated.hpp; \
 	done
-	echo ')";' >> licenses_generated.hpp
+	echo ')SHIJIMA_LIC";' >> licenses_generated.hpp
 
-ShijimaApiDialog.cc: api_doc_generated.hpp
-	touch ShijimaApiDialog.cc
+
+src/ui/ShijimaApiDialog.cc: api_doc_generated.hpp
+	touch src/ui/ShijimaApiDialog.cc
 
 api_doc_generated.hpp: $(API_DOC_FILES) Makefile
-	echo 'static const char *shijima_api_doc = R"(' > api_doc_generated.hpp
+	echo 'static const char *shijima_api_doc = R"SHIJIMA_API_DOC(' > api_doc_generated.hpp
 	for file in $^; do \
 		[ "$$file" != "Makefile" ] || continue; \
 		cat $$file >> api_doc_generated.hpp; \
 	done
-	echo ')";' >> api_doc_generated.hpp
+	echo ')SHIJIMA_API_DOC";' >> api_doc_generated.hpp
+
 
 libshijima/build/Makefile: libshijima/CMakeLists.txt FORCE
 	mkdir -p libshijima/build && cd libshijima/build && $(CMAKE) $(CMAKEFLAGS) -DSHIJIMA_BUILD_EXAMPLES=NO ..

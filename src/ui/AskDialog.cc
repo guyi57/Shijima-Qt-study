@@ -1,0 +1,154 @@
+// 
+// Shijima-Qt - Ask / Question Dialog Implementation
+// 
+
+#include "AskDialog.hpp"
+#include <QHBoxLayout>
+#include <QScreen>
+#include <QGuiApplication>
+
+AskDialog::AskDialog(QWidget *parent)
+    : QDialog(parent)
+{
+    setWindowTitle("向桌宠 AI 提问");
+    setWindowFlags(Qt::Dialog | Qt::WindowStaysOnTopHint | Qt::WindowCloseButtonHint);
+    setMinimumWidth(400);
+
+    auto mainLayout = new QVBoxLayout(this);
+    mainLayout->setContentsMargins(16, 16, 16, 16);
+    mainLayout->setSpacing(10);
+
+    m_titleLabel = new QLabel("💬 向 AI 提问", this);
+    m_titleLabel->setStyleSheet("font-weight: bold; font-size: 13px; color: #333;");
+    mainLayout->addWidget(m_titleLabel);
+
+    // 上下文引用卡片（带 X 清除按钮）
+    m_contextWidget = new QWidget(this);
+    m_contextWidget->setStyleSheet(
+        "QWidget#contextCard {"
+        "  background-color: #f5f7fa;"
+        "  border: 1px solid #e4e7ed;"
+        "  border-radius: 6px;"
+        "}"
+    );
+    m_contextWidget->setObjectName("contextCard");
+
+    auto contextLayout = new QHBoxLayout(m_contextWidget);
+    contextLayout->setContentsMargins(8, 6, 8, 6);
+    contextLayout->setSpacing(6);
+
+    m_previewLabel = new QLabel(m_contextWidget);
+    m_previewLabel->setStyleSheet("color: #4b5563; font-size: 11px; border: none; background: transparent;");
+    m_previewLabel->setWordWrap(true);
+    m_previewLabel->setMaximumHeight(80);
+    contextLayout->addWidget(m_previewLabel, 1);
+
+    m_clearContextBtn = new QPushButton("✕", m_contextWidget);
+    m_clearContextBtn->setToolTip("清除选中文本引用（改为自由提问）");
+    m_clearContextBtn->setFixedSize(20, 20);
+    m_clearContextBtn->setCursor(Qt::PointingHandCursor);
+    m_clearContextBtn->setStyleSheet(
+        "QPushButton {"
+        "  border: none;"
+        "  border-radius: 10px;"
+        "  background-color: #e2e8f0;"
+        "  color: #64748b;"
+        "  font-weight: bold;"
+        "  font-size: 11px;"
+        "}"
+        "QPushButton:hover {"
+        "  background-color: #ef4444;"
+        "  color: white;"
+        "}"
+    );
+    contextLayout->addWidget(m_clearContextBtn, 0, Qt::AlignTop);
+
+    mainLayout->addWidget(m_contextWidget);
+
+    connect(m_clearContextBtn, &QPushButton::clicked, this, [this]() {
+        m_contextText.clear();
+        m_contextWidget->hide();
+        m_titleLabel->setText("💬 自由向 AI 提问 (保留历史记忆)");
+        adjustSize();
+        m_inputEdit->setFocus();
+    });
+
+    m_inputEdit = new QLineEdit(this);
+    m_inputEdit->setPlaceholderText("请输入您的问题，按 Enter 键发送...");
+    m_inputEdit->setStyleSheet(
+        "QLineEdit {"
+        "  border: 1.5px solid #dcdfe6;"
+        "  border-radius: 6px;"
+        "  padding: 8px 10px;"
+        "  font-size: 12px;"
+        "}"
+        "QLineEdit:focus {"
+        "  border-color: #409eff;"
+        "}"
+    );
+    mainLayout->addWidget(m_inputEdit);
+
+    auto btnLayout = new QHBoxLayout();
+    btnLayout->addStretch();
+
+    m_cancelBtn = new QPushButton("取消", this);
+    m_sendBtn = new QPushButton("发送 ↵", this);
+
+    m_cancelBtn->setStyleSheet("padding: 6px 14px; border-radius: 6px; border: 1px solid #dcdfe6; background: #fff;");
+    m_sendBtn->setStyleSheet("padding: 6px 16px; border-radius: 6px; border: none; background: #409eff; color: white; font-weight: bold;");
+
+    m_cancelBtn->setCursor(Qt::PointingHandCursor);
+    m_sendBtn->setCursor(Qt::PointingHandCursor);
+
+    btnLayout->addWidget(m_cancelBtn);
+    btnLayout->addWidget(m_sendBtn);
+    mainLayout->addLayout(btnLayout);
+
+    connect(m_cancelBtn, &QPushButton::clicked, this, [this]() {
+        if (onCancel) onCancel();
+        reject();
+    });
+    
+    auto doSend = [this]() {
+        QString q = m_inputEdit->text().trimmed();
+        if (!q.isEmpty()) {
+            if (onSubmit) {
+                onSubmit(m_contextText, q);
+            }
+            accept();
+        }
+    };
+
+    connect(m_sendBtn, &QPushButton::clicked, this, doSend);
+    connect(m_inputEdit, &QLineEdit::returnPressed, this, doSend);
+}
+
+void AskDialog::promptForContext(QString const& contextText) {
+    m_contextText = contextText.trimmed();
+    if (m_contextText.isEmpty()) {
+        m_titleLabel->setText("💬 自由向 AI 提问 (保留历史记忆)");
+        m_contextWidget->hide();
+    } else {
+        m_titleLabel->setText("💬 结合选中文本提问 (AI 问答)");
+        QString preview = m_contextText;
+        if (preview.length() > 100) {
+            preview = preview.left(100) + "...";
+        }
+        m_previewLabel->setText("📌 参考选中文本: " + preview);
+        m_contextWidget->show();
+    }
+    
+    m_inputEdit->clear();
+    adjustSize();
+
+    // 居中显示
+    if (auto screen = QGuiApplication::primaryScreen()) {
+        auto geom = screen->geometry();
+        move(geom.center().x() - width() / 2, geom.center().y() - height() / 2);
+    }
+
+    show();
+    raise();
+    activateWindow();
+    m_inputEdit->setFocus();
+}

@@ -19,6 +19,8 @@
 #include "ShijimaContextMenu.hpp"
 #include "ShijimaWidget.hpp"
 #include "ShijimaManager.hpp"
+#include "BehaviorEngine.hpp"
+#include "MusicPlayerDialog.hpp"
 #include <QMap>
 
 // 行为名称中文翻译映射表
@@ -40,45 +42,74 @@ static QString translateBehaviorName(const std::string &name) {
         // 躺卧相关
         {"LieDown", "躺下"},
         
-        // 行走相关
+        // 行走与奔跑相关
         {"WalkAlongWorkAreaFloor", "沿地板行走"},
+        {"RunAlongWorkAreaFloor", "沿地板奔跑"},
         {"WalkLeftAlongFloorAndSit", "向左走并坐下"},
         {"WalkRightAlongFloorAndSit", "向右走并坐下"},
         {"WalkLeftAndSit", "向左走并坐下"},
         {"WalkRightAndSit", "向右走并坐下"},
         {"WalkAndGrabBottomLeftWall", "走到左墙边"},
         {"WalkAndGrabBottomRightWall", "走到右墙边"},
-        {"RunAlongWorkAreaFloor", "沿地板奔跑"},
         
         // 爬行相关
         {"CrawlAlongWorkAreaFloor", "沿地板爬行"},
-        {"CrawlAlongIECeiling", "沿天花板爬行"},
+        {"CrawlAlongIECeiling", "沿窗口顶部爬行"},
         
-        // 攀爬相关
-        {"ClimbIEWall", "爬墙"},
+        // 墙壁与天花板攀爬相关
+        {"ClimbAlongWall", "沿墙壁攀爬"},
+        {"ClimbAlongCeiling", "沿天花板攀爬"},
+        {"ClimbHalfwayAlongWall", "爬到半墙"},
         {"HoldOntoWall", "抓住墙壁"},
         {"FallFromWall", "从墙上掉落"},
         {"HoldOntoCeiling", "抓住天花板"},
         {"FallFromCeiling", "从天花板掉落"},
-        {"GrabWorkAreaBottomLeftWall", "抓住左下角"},
-        {"GrabWorkAreaBottomRightWall", "抓住右下角"},
+        {"GrabWorkAreaBottomLeftWall", "抓住左下墙角"},
+        {"GrabWorkAreaBottomRightWall", "抓住右下墙角"},
+        
+        // 窗口 (IE / Window) 交互与攀爬
+        {"HoldOntoIEWall", "抓住窗口侧边"},
+        {"ClimbIEWall", "爬窗口侧边"},
+        {"ClimbIEBottom", "爬窗口底部"},
+        {"GrabIEBottomLeftWall", "抓住窗口左下角"},
+        {"GrabIEBottomRightWall", "抓住窗口右下角"},
+        {"WalkAlongIECeiling", "沿窗口顶部走"},
+        {"RunAlongIECeiling", "沿窗口顶部跑"},
+        {"SitOnTheLeftEdgeOfIE", "坐在窗口左边缘"},
+        {"SitOnTheRightEdgeOfIE", "坐在窗口右边缘"},
+        {"WalkLeftAlongIEAndSit", "在窗口上向左走并坐下"},
+        {"WalkRightAlongIEAndSit", "在窗口上向右走并坐下"},
+        {"WalkLeftAlongIEAndJump", "在窗口上向左走并跳下"},
+        {"WalkRightAlongIEAndJump", "在窗口上向右走并跳下"},
         
         // 跳跃相关
         {"JumpFromBottomOfIE", "从底部跳起"},
+        {"JumpFromLeftEdgeOfIE", "从窗口左边跳下"},
+        {"JumpFromRightEdgeOfIE", "从窗口右边跳下"},
+        {"JumpFromLeftWall", "从左墙跳出"},
+        {"JumpFromRightWall", "从右墙跳出"},
+        {"JumpOnIELeftWall", "跳到窗口左侧"},
+        {"JumpOnIERightWall", "跳到窗口右侧"},
+        {"Jump", "跳跃"},
         
-        // 繁殖相关
+        // 搬运与扔窗口相关
+        {"ThrowIEFromLeft", "从左侧扔窗口"},
+        {"ThrowIEFromRight", "从右侧扔窗口"},
+        {"WalkAndThrowIEFromLeft", "从左侧走并扔窗口"},
+        {"WalkAndThrowIEFromRight", "从右侧走并扔窗口"},
+        
+        // 繁殖与同伴相关
         {"SplitIntoTwo", "分裂成两个"},
         {"PullUpShimeji", "拉起桌宠"},
         {"PullUp", "被拉起"},
         {"Divided", "被分裂"},
         
-        // 其他行为
+        // 其他趣味行为
         {"Yawn", "打哈欠"},
         {"Sleep", "睡觉"},
         {"Wave", "挥手"},
         {"Dance", "跳舞"},
-        {"Jump", "跳跃"},
-        {"Spin", "旋转"},
+        {"Spin", "旋转"}
     };
     
     QString qname = QString::fromStdString(name);
@@ -89,6 +120,30 @@ ShijimaContextMenu::ShijimaContextMenu(ShijimaWidget *parent)
     : QMenu("右键菜单", parent)
 {
     QAction *action;
+
+    // 顶部桌宠状态展示卡片
+    {
+        const auto &st = BehaviorEngine::instance()->state();
+        QString staminaBar = "";
+        int filled = std::clamp(st.stamina / 10, 0, 10);
+        for (int i = 0; i < 10; ++i) {
+            staminaBar += (i < filled ? "■" : "□");
+        }
+        QString statusText = QString("⚡ 体力: %1% [%2] %3")
+            .arg(st.stamina)
+            .arg(staminaBar)
+            .arg(st.isRestingInCorner ? "💤 (角落休整)" : "🌟 (元气满满)");
+        action = addAction(statusText);
+        action->setEnabled(false);
+
+        QString moodText = QString("😊 心情: %1  |  💕 亲密: %2")
+            .arg(st.mood)
+            .arg(st.affection);
+        action = addAction(moodText);
+        action->setEnabled(false);
+
+        addSeparator();
+    }
 
     // Behaviors menu   
     {
@@ -120,6 +175,36 @@ ShijimaContextMenu::ShijimaContextMenu(ShijimaWidget *parent)
     action = addAction("检查器");
     connect(action, &QAction::triggered, [this](){
         shijimaParent()->showInspector();
+    });
+
+    // Ask AI Dialog
+    action = addAction("💬 向 AI 提问");
+    connect(action, &QAction::triggered, [this](){
+        shijimaParent()->onAskRequested("");
+    });
+
+    // Message History Dialog
+    action = addAction("📜 消息与任务历史");
+    connect(action, &QAction::triggered, [this](){
+        shijimaParent()->showMessageHistory();
+    });
+
+    // Scheduled Timer Manager Dialog
+    action = addAction("⏰ 定时任务管理");
+    connect(action, &QAction::triggered, [this](){
+        shijimaParent()->showTimerManager();
+    });
+
+    // Music Player Dialog
+    action = addAction("🎵 音乐工坊 (⌥M)");
+    connect(action, &QAction::triggered, [](){
+        MusicPlayerDialog::instance()->toggleVisibility();
+    });
+
+    // AI Settings Dialog
+    action = addAction("⚙️ AI 模型与记忆配置");
+    connect(action, &QAction::triggered, [this](){
+        shijimaParent()->showAgentSettings();
     });
 
     // Pause checkbox

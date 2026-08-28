@@ -62,6 +62,8 @@ public:
     std::map<int, ShijimaWidget *> const& mascotsById();
     ShijimaWidget *hitTest(QPoint const& screenPos);
     void onTickSync(std::function<void(ShijimaManager *)> callback);
+    void setThrowImpulse(double dx, double dy);
+    void updateGlobalHotkeys();
     ~ShijimaManager();
 protected:
     void timerEvent(QTimerEvent *event) override;
@@ -89,7 +91,7 @@ private:
     void updateSandboxBackground();
     bool windowedMode();
     QWidget *mascotParent();
-    void setWindowedMode(bool windowedMode);
+    void setWindowedMode(bool);
     void screenAdded(QScreen *);
     void screenRemoved(QScreen *);
     void quitAction();
@@ -111,6 +113,10 @@ private:
     int m_idCounter;
     double m_userScale = 1.0;
     int m_windowObserverTimer = -1;
+    int m_sandboxWidgetTimer = -1;
+    double m_throwImpulseDx = 0.0;
+    double m_throwImpulseDy = 0.0;
+    int m_throwImpulseTicks = 0;
     QMap<QString, MascotData *> m_loadedMascots;
     QMap<int, MascotData *> m_loadedMascotsById;
     QSet<QString> m_listItemsToRefresh;

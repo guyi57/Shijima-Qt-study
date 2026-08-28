@@ -19,6 +19,9 @@
 #include "ShijimaHttpApi.hpp"
 #include <httplib.h>
 #include "ShijimaManager.hpp"
+#include "ShijimaWidget.hpp"
+#include "PetEventBus.hpp"
+#include "PetAction.hpp"
 #include <thread>
 #include <iostream>
 #include <QJsonArray>
@@ -320,13 +323,25 @@ ShijimaHttpApi::ShijimaHttpApi(ShijimaManager *manager): m_server(new Server),
                 auto widget = manager->mascotsById().at(id);
                 auto textValue = json->take("text");
                 auto durationValue = json->take("duration");
+
+                QString appTarget;
+                if (json->contains("app") && (*json)["app"].isString()) {
+                    appTarget = (*json)["app"].toString();
+                } else if (json->contains("app_name") && (*json)["app_name"].isString()) {
+                    appTarget = (*json)["app_name"].toString();
+                } else if (json->contains("bundle_id") && (*json)["bundle_id"].isString()) {
+                    appTarget = (*json)["bundle_id"].toString();
+                } else if (json->contains("url") && (*json)["url"].isString()) {
+                    appTarget = (*json)["url"].toString();
+                }
+
                 if (textValue.isString()) {
                     QString text = textValue.toString();
                     int duration = 0;
                     if (durationValue.isDouble()) {
                         duration = durationValue.toInt();
                     }
-                    widget->showMessage(text, duration);
+                    widget->showMessage(text, duration, appTarget);
                     object["success"] = true;
                 }
                 else {
@@ -402,6 +417,91 @@ ShijimaHttpApi::ShijimaHttpApi(ShijimaManager *manager): m_server(new Server),
             }
         });
     });
+
+    // POST /guyi/api/v1/events - 派发事件到 PetEventBus
+    m_server->Post("/guyi/api/v1/events",
+        [this](Request const& req, Response &res)
+    {
+        QJsonObject responseObj;
+        auto doc = QJsonDocument::fromJson(QByteArray(req.body.c_str(), req.body.size()));
+        if (!doc.isObject()) {
+            res.status = 400;
+            responseObj["success"] = false;
+            responseObj["error"] = "Invalid JSON body";
+            sendJson(res, responseObj);
+            return;
+        }
+
+        auto root = doc.object();
+        QString eventType = root["type"].toString();
+        if (eventType.trimmed().isEmpty()) {
+            res.status = 400;
+            responseObj["success"] = false;
+            responseObj["error"] = "Missing event 'type'";
+            sendJson(res, responseObj);
+            return;
+        }
+
+        QJsonObject payload = root["payload"].toObject();
+        m_manager->onTickSync([eventType, payload](ShijimaManager *) {
+            PetEventBus::instance()->emitEvent(eventType, payload);
+        });
+
+        responseObj["success"] = true;
+        responseObj["event_type"] = eventType;
+        sendJson(res, responseObj);
+    });
+
+    // POST /guyi/api/v1/actions - 直接下发高阶动作
+    m_server->Post("/guyi/api/v1/actions",
+        [this](Request const& req, Response &res)
+    {
+        QJsonObject responseObj;
+        auto doc = QJsonDocument::fromJson(QByteArray(req.body.c_str(), req.body.size()));
+        if (!doc.isObject()) {
+            res.status = 400;
+            responseObj["success"] = false;
+            responseObj["error"] = "Invalid JSON body";
+            sendJson(res, responseObj);
+            return;
+        }
+
+        auto root = doc.object();
+        QString actionStr = root["action"].toString("idle").toLower();
+        QString speech = root["speech"].toString();
+        int duration = root["duration"].toInt(4000);
+        QString appTarget = root["appTarget"].toString();
+
+        PetActionCommand cmd;
+        cmd.speechText = speech;
+        cmd.durationMs = duration;
+        cmd.appTarget = appTarget;
+
+        if (actionStr == "walk") cmd.type = PetActionType::Walk;
+        else if (actionStr == "sit") cmd.type = PetActionType::Sit;
+        else if (actionStr == "sleep") cmd.type = PetActionType::Sleep;
+        else if (actionStr == "jump") cmd.type = PetActionType::Jump;
+        else if (actionStr == "fall") cmd.type = PetActionType::Fall;
+        else if (actionStr == "happy") cmd.type = PetActionType::Happy;
+        else if (actionStr == "angry") cmd.type = PetActionType::Angry;
+        else if (actionStr == "follow") cmd.type = PetActionType::FollowCursor;
+        else if (actionStr == "talk") cmd.type = PetActionType::Talk;
+        else {
+            cmd.type = PetActionType::CustomBehavior;
+            cmd.customBehaviorName = root["action"].toString();
+        }
+
+        m_manager->onTickSync([cmd](ShijimaManager *manager) {
+            auto &list = manager->mascots();
+            if (!list.empty()) {
+                list.front()->doAction(cmd);
+            }
+        });
+
+        responseObj["success"] = true;
+        sendJson(res, responseObj);
+    });
+
     m_server->Get(".*", badRequest);
     m_server->Put(".*", badRequest);
     m_server->Post(".*", badRequest);

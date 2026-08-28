@@ -45,9 +45,9 @@ endif
 CONFIG_VALID := 0
 ifeq ($(CONFIG),release)
 	CONFIG_VALID := 1
-	CONFIG_CFLAGS := -O3 -flto -DNDEBUG
-	CONFIG_CXXFLAGS := -O3 -flto -DNDEBUG
-	CONFIG_LDFLAGS := -flto
+	CONFIG_CFLAGS := -O3 -DNDEBUG
+	CONFIG_CXXFLAGS := -O3 -DNDEBUG
+	CONFIG_LDFLAGS :=
 	CONFIG_CMAKEFLAGS := -DCMAKE_BUILD_TYPE=Release
 endif
 ifeq ($(CONFIG),debug)
@@ -62,11 +62,14 @@ $(error Invalid CONFIG. Try CONFIG=debug or CONFIG=release)
 endif
 
 ifeq ($(PLATFORM),macOS)
-	PLATFORM_LDFLAGS := -lobjc -framework AppKit -framework ApplicationServices
+	PLATFORM_LDFLAGS := -lobjc -framework AppKit -framework ApplicationServices -framework Carbon
 endif
 
 ifeq ($(PLATFORM),macOS)
-	QT_MACOS_PATH := /opt/local/libexec/qt$(QT_VERSION)/lib
+	QT_MACOS_PATH ?= /opt/homebrew/opt/qt$(QT_VERSION)/lib
+	ifeq ($(wildcard $(QT_MACOS_PATH)),)
+		QT_MACOS_PATH := /opt/local/libexec/qt$(QT_VERSION)/lib
+	endif
 	QT_FRAMEWORKS = $(addsuffix .framework,$(addprefix -I$(QT_MACOS_PATH)/Qt,$(QT_LIBS)))
 	QT_CFLAGS = -F$(QT_MACOS_PATH) $(addsuffix /Versions/Current/Headers,$(QT_FRAMEWORKS))
 	QT_LDFLAGS = -F$(QT_MACOS_PATH) $(addprefix -framework Qt,$(QT_LIBS))
@@ -169,7 +172,7 @@ CMAKEFLAGS = $(CONFIG_CMAKEFLAGS)
 	$(CC) -MMD -c $(CFLAGS) $(CPPFLAGS) $< -o $@
 
 %.o: %.mm
-	$(CC) -MMD -c $(CXXFLAGS) $(CPPFLAGS) $< -o $@
+	$(CXX) -MMD -c $(CXXFLAGS) -fobjc-arc $(CPPFLAGS) $< -o $@
 
 %.o: %.rc
 	$(WINDRES) $< -o $@
@@ -177,10 +180,11 @@ CMAKEFLAGS = $(CONFIG_CMAKEFLAGS)
 all::
 
 clean::
-	rm -f *.d
+	rm -f $(OBJECTS) $(OBJECTS:.o=.d) *.d
 
 FORCE: ;
 
 .PHONY: all clean FORCE
 
--include *.d
+-include $(OBJECTS:.o=.d)
+

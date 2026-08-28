@@ -24,6 +24,9 @@
 #include "Platform/Platform.hpp"
 #include "ShijimaManager.hpp"
 #include "AssetLoader.hpp"
+#include "BehaviorEngine.hpp"
+#include "SystemObserver.hpp"
+#include "MusicFavoriteDb.hpp"
 #include "cli.hpp"
 #include <httplib.h>
 
@@ -38,6 +41,7 @@ int main(int argc, char **argv) {
     QApplication app(argc, argv);
     app.setApplicationName("Shijima-Qt");
     app.setApplicationDisplayName("Shijima-Qt");
+    app.setQuitOnLastWindowClosed(false);
     try {
         httplib::Client pingClient { "http://127.0.0.1:32456" };
         pingClient.set_connection_timeout(0, 500000);
@@ -46,7 +50,14 @@ int main(int argc, char **argv) {
         if (pingResult != nullptr) {
             throw std::runtime_error("Shijima-Qt is already running!");
         }
-        ShijimaManager::defaultManager()->show();
+        auto manager = ShijimaManager::defaultManager();
+        if (manager->mascots().empty() && !manager->loadedMascots().isEmpty()) {
+            manager->spawn(manager->loadedMascots().firstKey().toStdString());
+        }
+        manager->setManagerVisible(false);
+        MusicFavoriteDb::instance()->initDb();
+        BehaviorEngine::instance()->start();
+        SystemObserver::instance()->start();
     }
     catch (std::exception &ex) {
         QMessageBox *msg = new QMessageBox {};

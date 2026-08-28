@@ -1,29 +1,28 @@
-#!/usr/bin/env bash
+#!/usr/bin/env python3
+import sys, os
 
-# Adapted from https://github.com/pixelomer/BadApple
+if len(sys.argv) < 2:
+    print("Usage: bundle-default.py <files...>", file=sys.stderr)
+    sys.exit(1)
 
-# Fail on error
-set -e
+print('#include "DefaultMascot.hpp"\n')
+print('const std::map<std::string, std::pair<const char *, size_t>> defaultMascot = {')
 
-if [ -z "$1" ]; then
-    echo "Usage: $0 <files...>" >&2
-    exit 1
-fi
+for filepath in sys.argv[1:]:
+    if not os.path.exists(filepath):
+        continue
+    with open(filepath, 'rb') as f:
+        data = f.read()
+    length = len(data)
+    name = os.path.basename(filepath)
+    data += b'\x00'
+    hex_lines = []
+    for i in range(0, len(data), 16):
+        chunk = data[i:i+16]
+        escaped = ''.join(fr'\x{b:02X}' for b in chunk)
+        hex_lines.append(f'    "{escaped}"')
+    
+    body = '\n'.join(hex_lines)
+    print(f'\t{{ "{name}", {{\n{body}\n\t, {length} }} }},')
 
-file_size="$(wc -c < "$1" | awk '{print $1}')"
-
-echo "#include \"DefaultMascot.hpp\""
-echo
-
-echo "const std::map<std::string, std::pair<const char *, size_t>> defaultMascot = {"
-for file in "$@"; do
-    length="$(wc -c < "${file}")"
-    name="$(basename "${file}")"
-    echo -ne "\t"
-    echo "{ \"${name}\", { "
-    (cat "$file"; echo -ne '\x00') | hexdump -v -e '16/1 "_x%02X" "\n"' | \
-        sed 's/_/\\/g; s/\\x  //g; s/.*/    "&"/'
-    echo -e "\t, ${length} } },"
-    ((offset+=length))
-done
-echo -e "};"
+print('};')

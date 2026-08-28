@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     types: [opened, synchronize, reopened]
+  workflow_dispatch:
 
 jobs:
   build-windows:
@@ -17,10 +18,9 @@ jobs:
         env:
           BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
         run: |
-          git fetch --unshallow origin $BRANCH_NAME
+          git fetch --unshallow origin $BRANCH_NAME || true
           pushd libshijima
-          git fetch --unshallow origin main
-          echo "libshijima: $(git rev-list HEAD --count) commits"
+          git fetch --unshallow origin main || true
           popd
       - name: Cache Docker image
         id: cache-docker
@@ -47,13 +47,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: debug-windows-x86_64
-          path: publish/Windows/debug/shijima-qt.exe
+          path: publish/Windows/debug
           retention-days: 1
+
   build-linux:
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      matrix:
-        runner: [ ubuntu-24.04-arm, ubuntu-22.04 ]
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -62,27 +60,14 @@ jobs:
         env:
           BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
         run: |
-          git fetch --unshallow origin $BRANCH_NAME
+          git fetch --unshallow origin $BRANCH_NAME || true
           pushd libshijima
-          git fetch --unshallow origin main
-          echo "libshijima: $(git rev-list HEAD --count) commits"
+          git fetch --unshallow origin main || true
           popd
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Install Qt6
-        uses: jdpurcell/install-qt-action@v5
-        with:
-          use-naqt: true
-          version: '6.8.2'
-          host: ${{ (matrix.runner == 'ubuntu-24.04-arm') && 'linux_arm64' || 'linux' }}
-          target: 'desktop'
-          arch: ${{ (matrix.runner == 'ubuntu-24.04-arm') && 'linux_gcc_arm64' || 'linux_gcc_64' }}
-          modules: 'qtmultimedia'
-          cache: true
       - name: Install build dependencies
         run: |
-          sudo apt-get install -y libxcb-cursor0 libarchive-dev libwayland-dev wayland-protocols
+          sudo apt-get update
+          sudo apt-get install -y qt6-base-dev qt6-multimedia-dev libarchive-dev libx11-dev libsqlite3-dev libxcb-cursor0 libwayland-dev wayland-protocols pkg-config build-essential libgl1-mesa-dev libxkbcommon-dev
       - name: Build Linux debug build
         env:
           CONFIG: debug
@@ -92,11 +77,10 @@ jobs:
       - name: Archive Linux debug build
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ (matrix.runner == 'ubuntu-24.04-arm') && 'debug-linux-arm64' || 'debug-linux-x86_64' }}
-          path: |
-            publish/Linux/debug/shijima-qt
-            publish/Linux/debug/libunarr.so.1
+          name: debug-linux-x86_64
+          path: publish/Linux/debug
           retention-days: 1
+
   build-macos:
     runs-on: macos-14
     steps:
@@ -107,49 +91,25 @@ jobs:
         env:
           BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
         run: |
-          git fetch --unshallow origin $BRANCH_NAME
+          git fetch --unshallow origin $BRANCH_NAME || true
           pushd libshijima
-          git fetch --unshallow origin main
-          echo "libshijima: $(git rev-list HEAD --count) commits"
+          git fetch --unshallow origin main || true
           popd
-      - name: Temporarily let gtar run as root
+      - name: Install dependencies via Homebrew
         run: |
-          sudo chown 0:0 /opt/homebrew/bin/gtar
-          sudo chmod u+s /opt/homebrew/bin/gtar
-      - name: Cache Qt6
-        id: cache-qt6
-        uses: actions/cache@v4
-        with:
-          path: /opt/local
-          key: macos-14-macports-qt6
-      - name: Revoke gtar's root permissions
-        run: |
-          sudo chmod u-s /opt/homebrew/bin/gtar
-      - name: Install Qt6
-        if: steps.cache-qt6.outputs.cache-hit != 'true'
-        run: |
-          wget --no-verbose https://github.com/macports/macports-base/releases/download/v2.10.5/MacPorts-2.10.5-14-Sonoma.pkg
-          sudo installer -pkg MacPorts-2.10.5-14-Sonoma.pkg -target /
-          export PATH=/opt/local/bin:/opt/local/sbin:$PATH
-          yes | sudo port install qt6-qtbase qt6-qtmultimedia pkgconfig libarchive
-          sudo rm -rf /opt/local/var/macports/build/*
-          sudo rm -rf /opt/local/var/macports/distfiles/*
-      - name: Expose MacPorts tools
-        run: |
-          echo "PATH=/opt/local/bin:/opt/local/sbin:$PATH" >> $GITHUB_ENV
+          brew install qt@6 libarchive pkg-config
       - name: Build macOS arm64 debug build
         env:
           CONFIG: debug
+          PATH: /opt/homebrew/opt/qt@6/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+          PKG_CONFIG_PATH: /opt/homebrew/opt/libarchive/lib/pkgconfig:/opt/homebrew/opt/qt@6/lib/pkgconfig
+          CMAKE_PREFIX_PATH: /opt/homebrew/opt/qt@6
         run: |
           make clean
-          make -j6
+          make -j$(sysctl -n hw.ncpu)
       - name: Archive macOS arm64 debug build
         uses: actions/upload-artifact@v4
         with:
           name: debug-macos-arm64
-          path: publish/macOS/debug/shijima-qt
+          path: publish/macOS/debug
           retention-days: 1
-      - name: Temporarily let gtar run as root
-        run: |
-          sudo chown 0:0 /opt/homebrew/bin/gtar
-          sudo chmod u+s /opt/homebrew/bin/gtar

@@ -234,7 +234,8 @@ api_doc_generated.hpp: $(API_DOC_FILES) Makefile
 
 
 libshijima/build/Makefile: libshijima/CMakeLists.txt FORCE
-	mkdir -p libshijima/build && cd libshijima/build && $(CMAKE) $(CMAKEFLAGS) -DSHIJIMA_BUILD_EXAMPLES=NO ..
+	mkdir -p libshijima/build && cd libshijima/build && $(CMAKE) $(CMAKEFLAGS) -DCMAKE_CXX_FLAGS="-DSHIJIMA_DUK_STATIC_BUILD -Wno-error" -DSHIJIMA_BUILD_EXAMPLES=NO ..
+
 
 libshimejifinder/build/Makefile: libshimejifinder/CMakeLists.txt FORCE
 	mkdir -p libshimejifinder/build && cd libshimejifinder/build && \

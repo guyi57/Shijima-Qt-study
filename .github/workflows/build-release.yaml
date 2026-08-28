@@ -1,6 +1,15 @@
-name: Build release
+name: Build and Release
 
-on: [workflow_dispatch]
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release Tag (e.g. v1.0.0)'
+        required: false
+        default: 'v1.0.0'
 
 jobs:
   build-windows:
@@ -13,10 +22,9 @@ jobs:
         env:
           BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
         run: |
-          git fetch --unshallow origin $BRANCH_NAME
+          git fetch --unshallow origin $BRANCH_NAME || true
           pushd libshijima
-          git fetch --unshallow origin main
-          echo "libshijima: $(git rev-list HEAD --count) commits"
+          git fetch --unshallow origin main || true
           popd
       - name: Cache Docker image
         id: cache-docker
@@ -39,12 +47,18 @@ jobs:
         run: |
           docker run -e CONFIG=release --rm -v "$(pwd)":/work shijima-qt-dev bash -c \
             'mingw64-make clean && mingw64-make -j$(nproc) && cp -r licenses publish/Windows/release/'
+      - name: Package Windows Zip
+        run: |
+          cd publish/Windows/release
+          zip -r ../../../Shijima-Qt-Windows-x64.zip .
+          cd ../../..
       - name: Archive Windows x86_64 release build
         uses: actions/upload-artifact@v4
         with:
           name: release-windows-x86_64
-          path: publish/Windows/release
+          path: Shijima-Qt-Windows-x64.zip
           retention-days: 1
+
   build-linux:
     runs-on: ${{ matrix.runner }}
     strategy:
@@ -58,10 +72,9 @@ jobs:
         env:
           BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
         run: |
-          git fetch --unshallow origin $BRANCH_NAME
+          git fetch --unshallow origin $BRANCH_NAME || true
           pushd libshijima
-          git fetch --unshallow origin main
-          echo "libshijima: $(git rev-list HEAD --count) commits"
+          git fetch --unshallow origin main || true
           popd
       - uses: actions/setup-node@v4
         with:
@@ -91,12 +104,20 @@ jobs:
           make -j$(nproc)
           make appimage
           cp -r licenses publish/Linux/release/
+      - name: Package Linux AppImage
+        run: |
+          if [ "${{ matrix.runner }}" = "ubuntu-24.04-arm" ]; then
+            cp publish/Linux/release/Shijima-Qt-*.AppImage Shijima-Qt-Linux-arm64.AppImage || cp publish/Linux/release/*.AppImage Shijima-Qt-Linux-arm64.AppImage
+          else
+            cp publish/Linux/release/Shijima-Qt-*.AppImage Shijima-Qt-Linux-x86_64.AppImage || cp publish/Linux/release/*.AppImage Shijima-Qt-Linux-x86_64.AppImage
+          fi
       - name: Archive Linux release build
         uses: actions/upload-artifact@v4
         with:
           name: ${{ (matrix.runner == 'ubuntu-24.04-arm') && 'release-linux-arm64' || 'release-linux-x86_64' }}
-          path: publish/Linux/release
+          path: ${{ (matrix.runner == 'ubuntu-24.04-arm') && 'Shijima-Qt-Linux-arm64.AppImage' || 'Shijima-Qt-Linux-x86_64.AppImage' }}
           retention-days: 1
+
   build-macos:
     runs-on: macos-14
     steps:
@@ -107,10 +128,9 @@ jobs:
         env:
           BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
         run: |
-          git fetch --unshallow origin $BRANCH_NAME
+          git fetch --unshallow origin $BRANCH_NAME || true
           pushd libshijima
-          git fetch --unshallow origin main
-          echo "libshijima: $(git rev-list HEAD --count) commits"
+          git fetch --unshallow origin main || true
           popd
       - name: Temporarily let gtar run as root
         run: |
@@ -145,13 +165,46 @@ jobs:
           make -j6
           make macapp
           cp -r licenses publish/macOS/release/
+      - name: Package macOS Zip
+        run: |
+          cd publish/macOS/release
+          zip -r -y ../../../Shijima-Qt-macOS-AppleSilicon.zip Shijima-Qt.app
+          cd ../../..
       - name: Archive macOS arm64 release build
         uses: actions/upload-artifact@v4
         with:
           name: release-macos-arm64
-          path: publish/macOS/release
+          path: Shijima-Qt-macOS-AppleSilicon.zip
           retention-days: 1
       - name: Temporarily let gtar run as root
         run: |
           sudo chown 0:0 /opt/homebrew/bin/gtar
           sudo chmod u+s /opt/homebrew/bin/gtar
+
+  publish-release:
+    needs: [build-windows, build-linux, build-macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+      - name: Prepare Release Assets
+        run: |
+          mkdir -p final-assets
+          find release-assets -type f \( -name "*.zip" -o -name "*.AppImage" \) -exec cp {} final-assets/ \;
+          ls -la final-assets/
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag_name || 'v1.0.0' }}
+          name: "Shijima-Qt Release ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag_name || 'v1.0.0' }}"
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            final-assets/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

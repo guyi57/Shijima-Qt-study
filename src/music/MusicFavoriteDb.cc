@@ -3,7 +3,12 @@
 #include <QStandardPaths>
 #include <QDir>
 #include <QDebug>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <iostream>
+
 
 MusicFavoriteDb* MusicFavoriteDb::instance()
 {

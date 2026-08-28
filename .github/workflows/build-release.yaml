@@ -23,7 +23,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: shijima-qt-dev.tar.gz
-          key: docker-fedora-41-qt6-mingw-v4
+          key: docker-fedora-41-qt6-mingw-v5
       - name: Build Docker image
         if: steps.cache-docker.outputs.cache-hit != 'true'
         run: |
@@ -88,15 +88,15 @@ jobs:
           submodules: 'recursive'
       - name: Install dependencies via Homebrew
         run: |
-          brew install qt@6 libarchive pkg-config cmake
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install qt@6 libarchive pkg-config cmake
+          echo "/opt/homebrew/opt/qt@6/bin" >> $GITHUB_PATH
+          echo "PKG_CONFIG_PATH=/opt/homebrew/opt/libarchive/lib/pkgconfig:/opt/homebrew/opt/qt@6/lib/pkgconfig" >> $GITHUB_ENV
+          echo "CMAKE_PREFIX_PATH=/opt/homebrew/opt/qt@6" >> $GITHUB_ENV
+          echo "LDFLAGS=-L/opt/homebrew/opt/libarchive/lib -L/opt/homebrew/opt/qt@6/lib" >> $GITHUB_ENV
+          echo "CPPFLAGS=-I/opt/homebrew/opt/libarchive/include -I/opt/homebrew/opt/qt@6/include" >> $GITHUB_ENV
       - name: Build macOS arm64 release build
         env:
           CONFIG: release
-          PATH: /opt/homebrew/opt/qt@6/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
-          PKG_CONFIG_PATH: /opt/homebrew/opt/libarchive/lib/pkgconfig:/opt/homebrew/opt/qt@6/lib/pkgconfig
-          CMAKE_PREFIX_PATH: /opt/homebrew/opt/qt@6
-          LDFLAGS: -L/opt/homebrew/opt/libarchive/lib -L/opt/homebrew/opt/qt@6/lib
-          CPPFLAGS: -I/opt/homebrew/opt/libarchive/include -I/opt/homebrew/opt/qt@6/include
         run: |
           make clean
           make -j$(sysctl -n hw.ncpu)

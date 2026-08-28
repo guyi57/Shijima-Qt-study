@@ -163,9 +163,10 @@ publish/macOS/$(CONFIG): shijima-qt$(EXE)
 
 publish/Linux/$(CONFIG): shijima-qt$(EXE)
 	mkdir -p $@
-	@$(call copy_changed,libshimejifinder/build/unarr/libunarr.so.1,$@)
-	if [ $(CONFIG) = release ]; then $(STRIP) -S $@/libunarr.so.1; fi
+	@cp -d libshimejifinder/build/unarr/libunarr.so* $@/ 2>/dev/null || true
+	if [ $(CONFIG) = release ]; then $(STRIP) -S $@/libunarr.so* 2>/dev/null || true; fi
 	@$(call copy_changed,$<,$@)
+
 
 publish/macOS/$(CONFIG)/Shijima-Qt.app: publish/macOS/$(CONFIG)
 	rm -rf $@ && [ ! -d $@ ]

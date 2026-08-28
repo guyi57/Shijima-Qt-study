@@ -27,7 +27,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: shijima-qt-dev.tar.gz
-          key: docker-fedora-42-qt6-mingw
+          key: docker-fedora-41-qt6-mingw-v3
       - name: Build Docker image
         if: steps.cache-docker.outputs.cache-hit != 'true'
         run: |
@@ -51,7 +51,7 @@ jobs:
           retention-days: 1
 
   build-linux:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -104,6 +104,8 @@ jobs:
           PATH: /opt/homebrew/opt/qt@6/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
           PKG_CONFIG_PATH: /opt/homebrew/opt/libarchive/lib/pkgconfig:/opt/homebrew/opt/qt@6/lib/pkgconfig
           CMAKE_PREFIX_PATH: /opt/homebrew/opt/qt@6
+          LDFLAGS: -L/opt/homebrew/opt/libarchive/lib -L/opt/homebrew/opt/qt@6/lib
+          CPPFLAGS: -I/opt/homebrew/opt/libarchive/include -I/opt/homebrew/opt/qt@6/include
         run: |
           make clean
           make -j$(sysctl -n hw.ncpu)

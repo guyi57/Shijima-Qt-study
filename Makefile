@@ -12,8 +12,9 @@ endif
 ifeq ($(PLATFORM),Windows)
 PLATFORM_SYSTEM_SOURCES = src/system/HotkeyManager_win.cc \
 	src/system/SystemObserver_win.cc
-TARGET_LDFLAGS += -lws2_32 -lole32 -lshell32 -luser32 -lkernel32 -lpsapi
+TARGET_LDFLAGS += -lws2_32 -lole32 -lshell32 -luser32 -lkernel32 -lpsapi -lsqlite3
 endif
+
 
 ifeq ($(PLATFORM),Linux)
 PLATFORM_SYSTEM_SOURCES = 

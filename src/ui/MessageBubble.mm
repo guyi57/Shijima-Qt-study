@@ -17,8 +17,15 @@
 #include <iostream>
 #include "MessageHistoryManager.hpp"
 #include "MessageHistoryDialog.hpp"
+
+#if defined(__APPLE__)
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
+#elif defined(_WIN32)
+#include <windows.h>
+#include <shellapi.h>
+#endif
+
 
 #if defined(__APPLE__)
 static BOOL NeverBecomeKey(id self, SEL _cmd) {
@@ -293,7 +300,7 @@ MessageBubble::MessageBubble(QWidget *parent)
     setWindowFlags(Qt::ToolTip | Qt::FramelessWindowHint | 
         Qt::WindowStaysOnTopHint | Qt::WindowDoesNotAcceptFocus);
 
-    #if defined(__APPLE__)
+#if defined(__APPLE__)
     NSView *bubbleView = (__bridge NSView *)((void *)winId());
     NSWindow *bubbleWin = [bubbleView window];
     if (bubbleWin != nil) {
@@ -322,7 +329,15 @@ MessageBubble::MessageBubble(QWidget *parent)
             object_setClass(bubbleWin, subclass);
         }
     }
-    #endif
+#elif defined(_WIN32)
+    HWND hwnd = (HWND)winId();
+    if (hwnd) {
+        LONG_PTR exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
+        exStyle |= (WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE);
+        SetWindowLongPtr(hwnd, GWL_EXSTYLE, exStyle);
+    }
+#endif
+
 
     auto mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(18, 14, 18, 14);
@@ -490,10 +505,11 @@ void MessageBubble::openAppTarget()
     if (m_appTarget.trimmed().isEmpty()) return;
 
     QString target = m_appTarget.trimmed();
-    NSString *nsTarget = target.toNSString();
     bool launched = false;
-
     std::cout << "[应用唤醒] 准备打开目标: " << target.toStdString() << std::endl;
+
+#if defined(__APPLE__)
+    NSString *nsTarget = target.toNSString();
 
     // 1. 如果是 URL 链接或自定义协议 (如 https://, vscode://, weixin://)
     if (target.contains("://")) {
@@ -550,8 +566,19 @@ void MessageBubble::openAppTarget()
         }
         launched = true;
     }
+#elif defined(_WIN32)
+    if (target.contains("://") || target.startsWith("http", Qt::CaseInsensitive)) {
+        launched = QDesktopServices::openUrl(QUrl::fromUserInput(target));
+    } else {
+        HINSTANCE hInst = ShellExecuteW(NULL, L"open", reinterpret_cast<const wchar_t*>(target.utf16()), NULL, NULL, SW_SHOWNORMAL);
+        launched = ((INT_PTR)hInst > 32);
+    }
+#else
+    launched = QDesktopServices::openUrl(QUrl::fromUserInput(target));
+#endif
 
     std::cout << "[应用唤醒] 应用启动完成: " << target.toStdString() << " (成功: " << (launched ? "是" : "否") << ")" << std::endl;
+
 
     if (m_openAppBtn) {
         static_cast<IconCardButton*>(m_openAppBtn)->setText("已打开 ✅");

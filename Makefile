@@ -4,6 +4,21 @@ SHIJIMA_USE_QTMULTIMEDIA ?= 1
 
 PREFIX ?= /usr/local
 
+ifeq ($(PLATFORM),macOS)
+PLATFORM_SYSTEM_SOURCES = src/system/HotkeyManager_mac.mm \
+	src/system/SystemObserver_mac.mm
+endif
+
+ifeq ($(PLATFORM),Windows)
+PLATFORM_SYSTEM_SOURCES = src/system/HotkeyManager_win.cc \
+	src/system/SystemObserver_win.cc
+TARGET_LDFLAGS += -lws2_32 -lole32 -lshell32 -luser32 -lkernel32 -lpsapi
+endif
+
+ifeq ($(PLATFORM),Linux)
+PLATFORM_SYSTEM_SOURCES = 
+endif
+
 SOURCES = src/main.cc \
 	src/core/Asset.cc \
 	src/core/MascotData.cc \
@@ -27,8 +42,7 @@ SOURCES = src/main.cc \
 	src/music/MusicPlayerDialog.cc \
 	src/timer/TimerManager.cc \
 	src/timer/TimerListDialog.cc \
-	src/system/HotkeyManager.mm \
-	src/system/SystemObserver.mm \
+	$(PLATFORM_SYSTEM_SOURCES) \
 	src/ui/MessageBubble.mm \
 	src/ui/ScoreBadgeWidget.mm \
 	src/ui/PetStatusBarWidget.mm \
@@ -63,7 +77,7 @@ API_DOC_FILES := HTTP-API.md
 
 QT_LIBS = Widgets Core Gui Concurrent Network
 
-TARGET_LDFLAGS := -Llibshimejifinder/build/unarr -lunarr
+TARGET_LDFLAGS += -Llibshimejifinder/build/unarr -lunarr
 
 ifeq ($(PLATFORM),Linux)
 QT_LIBS += DBus
@@ -79,6 +93,7 @@ ifeq ($(PLATFORM),macOS)
 TARGET_LDFLAGS += -L/opt/homebrew/opt/libarchive/lib -larchive -lsqlite3
 CXXFLAGS += -I/opt/homebrew/opt/libarchive/include
 endif
+
 
 ifeq ($(SHIJIMA_USE_QTMULTIMEDIA),1)
 QT_LIBS += Multimedia

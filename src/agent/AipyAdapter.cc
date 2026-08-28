@@ -24,8 +24,18 @@ AipyAdapter::AipyAdapter(QNetworkAccessManager *netMgr)
 }
 
 QString AipyAdapter::autoDetectLocalApiKey() {
+    QString dbPath;
+#if defined(_WIN32)
+    QString appData = qEnvironmentVariable("APPDATA");
+    if (appData.isEmpty()) appData = QDir::homePath() + "/AppData/Roaming";
+    dbPath = appData + "/aipy-pro/aipy";
+#elif defined(__APPLE__)
     QString homePath = QDir::homePath();
-    QString dbPath = homePath + "/Library/Application Support/aipy-pro/aipy";
+    dbPath = homePath + "/Library/Application Support/aipy-pro/aipy";
+#else
+    QString homePath = QDir::homePath();
+    dbPath = homePath + "/.config/aipy-pro/aipy";
+#endif
 
     QProcess proc;
     QStringList args;

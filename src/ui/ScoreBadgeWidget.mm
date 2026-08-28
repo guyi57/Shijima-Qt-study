@@ -6,12 +6,19 @@
 #include <QEasingCurve>
 #include <QFont>
 #include <QGuiApplication>
+#include <QFileInfo>
+
+#if defined(__APPLE__)
 #import <AppKit/AppKit.h>
+#elif defined(_WIN32)
+#include <windows.h>
+#endif
 
 bool Platform_isAppFrontmost(QString const& appTarget)
 {
     if (appTarget.trimmed().isEmpty()) return false;
 
+#if defined(__APPLE__)
     @autoreleasepool {
         NSRunningApplication *frontApp = [[NSWorkspace sharedWorkspace] frontmostApplication];
         if (!frontApp) return false;
@@ -37,6 +44,28 @@ bool Platform_isAppFrontmost(QString const& appTarget)
             }
         }
     }
+#elif defined(_WIN32)
+    HWND foreground = GetForegroundWindow();
+    if (foreground) {
+        DWORD pid = 0;
+        GetWindowThreadProcessId(foreground, &pid);
+        HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+        if (hProc) {
+            wchar_t exePath[MAX_PATH] = {0};
+            DWORD size = MAX_PATH;
+            if (QueryFullProcessImageNameW(hProc, 0, exePath, &size)) {
+                QString fullPath = QString::fromWCharArray(exePath);
+                QString baseName = QFileInfo(fullPath).baseName();
+                CloseHandle(hProc);
+                if (baseName.compare(appTarget.trimmed(), Qt::CaseInsensitive) == 0 ||
+                    appTarget.contains(baseName, Qt::CaseInsensitive)) {
+                    return true;
+                }
+            }
+            CloseHandle(hProc);
+        }
+    }
+#endif
     return false;
 }
 
@@ -48,7 +77,7 @@ ScoreBadgeWidget::ScoreBadgeWidget(QWidget *parent)
     setAttribute(Qt::WA_DeleteOnClose);
     setFocusPolicy(Qt::NoFocus);
 
-    #if defined(__APPLE__)
+#if defined(__APPLE__)
     NSView *badgeView = (__bridge NSView *)((void *)winId());
     NSWindow *badgeWin = [badgeView window];
     if (badgeWin != nil) {
@@ -61,7 +90,15 @@ ScoreBadgeWidget::ScoreBadgeWidget(QWidget *parent)
         [badgeWin setLevel:NSFloatingWindowLevel];
         [badgeWin setHidesOnDeactivate:NO];
     }
-    #endif
+#elif defined(_WIN32)
+    HWND hwnd = (HWND)winId();
+    if (hwnd) {
+        LONG_PTR exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
+        exStyle |= (WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE);
+        SetWindowLongPtr(hwnd, GWL_EXSTYLE, exStyle);
+    }
+#endif
+
 
     m_opacityEffect = new QGraphicsOpacityEffect(this);
     setGraphicsEffect(m_opacityEffect);

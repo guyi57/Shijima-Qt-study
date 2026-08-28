@@ -75,18 +75,18 @@ ifeq ($(PLATFORM),macOS)
 		elif [ -d "/opt/homebrew/opt/qt$(QT_VERSION)/lib" ]; then echo "/opt/homebrew/opt/qt$(QT_VERSION)/lib"; \
 		elif [ -d "/opt/homebrew/opt/qt/lib" ]; then echo "/opt/homebrew/opt/qt/lib"; \
 		elif [ -d "/opt/local/libexec/qt$(QT_VERSION)/lib" ]; then echo "/opt/local/libexec/qt$(QT_VERSION)/lib"; \
-		else echo "/opt/homebrew/opt/qt$(QT_VERSION)/lib"; fi)
+		else echo "/opt/homebrew/opt/qt@$(QT_VERSION)/lib"; fi)
 	QT_FRAMEWORKS = $(addsuffix .framework/Headers,$(addprefix -I$(QT_MACOS_PATH)/Qt,$(QT_LIBS))) \
-		$(addsuffix .framework/Versions/Current/Headers,$(addprefix -I$(QT_MACOS_PATH)/Qt,$(QT_LIBS)))
+		$(addsuffix .framework/Versions/Current/Headers,$(addprefix -I$(QT_MACOS_PATH)/Qt,$(QT_LIBS))) \
+		$(addsuffix .framework/Versions/A/Headers,$(addprefix -I$(QT_MACOS_PATH)/Qt,$(QT_LIBS)))
 	QT_CFLAGS = -F$(QT_MACOS_PATH) $(QT_FRAMEWORKS)
 	QT_LDFLAGS = -F$(QT_MACOS_PATH) $(addprefix -framework Qt,$(QT_LIBS))
-
-
 else
 	PREFIXED_QT_LIBS = $(addprefix Qt$(QT_VERSION),$(QT_LIBS))
-	QT_CFLAGS = $(shell [ -z "$(QT_LIBS)" ] || $(PKG_CONFIG) --cflags $(PREFIXED_QT_LIBS))
-	QT_LDFLAGS = $(shell [ -z "$(QT_LIBS)" ] || $(PKG_CONFIG) --libs $(PREFIXED_QT_LIBS))
+	QT_CFLAGS = $(shell $(PKG_CONFIG) --cflags $(PREFIXED_QT_LIBS) 2>/dev/null || echo "-I/usr/include/x86_64-linux-gnu/qt6 -I/usr/include/qt6 -I/usr/include/x86_64-linux-gnu/qt6/QtWidgets -I/usr/include/x86_64-linux-gnu/qt6/QtCore -I/usr/include/x86_64-linux-gnu/qt6/QtGui -I/usr/include/x86_64-linux-gnu/qt6/QtConcurrent -I/usr/include/x86_64-linux-gnu/qt6/QtNetwork -I/usr/include/x86_64-linux-gnu/qt6/QtDBus -I/usr/include/x86_64-linux-gnu/qt6/QtMultimedia")
+	QT_LDFLAGS = $(shell $(PKG_CONFIG) --libs $(PREFIXED_QT_LIBS) 2>/dev/null || echo "-lQt6Widgets -lQt6Core -lQt6Gui -lQt6Concurrent -lQt6Network -lQt6DBus -lQt6Multimedia")
 endif
+
 
 ifeq ($(PLATFORM),macOS)
 	LD_WHOLE_ARCHIVE :=

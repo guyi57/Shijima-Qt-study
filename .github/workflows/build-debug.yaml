@@ -19,7 +19,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: shijima-qt-dev.tar.gz
-          key: docker-fedora-41-qt6-mingw-v5
+          key: docker-fedora-41-qt6-mingw-v6
       - name: Build Docker image
         if: steps.cache-docker.outputs.cache-hit != 'true'
         run: |
@@ -34,7 +34,11 @@ jobs:
       - name: Build Windows x86_64 debug build
         run: |
           docker run -e CONFIG=debug --rm -v "$(pwd)":/work shijima-qt-dev bash -c \
-            'mingw64-make clean && mingw64-make -j$(nproc)'
+            'mingw64-make clean && mingw64-make -j$(nproc) 2>&1 | tee build_win.log'
+      - name: Print Windows build log on failure
+        if: failure()
+        run: |
+          cat build_win.log || true
       - name: Archive Windows x86_64 debug build
         uses: actions/upload-artifact@v4
         with:
@@ -51,13 +55,17 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake git qt6-base-dev qt6-multimedia-dev libarchive-dev libx11-dev libsqlite3-dev libxcb-cursor0 libwayland-dev wayland-protocols pkg-config build-essential libgl1-mesa-dev libxkbcommon-dev
+          sudo apt-get install -y cmake git qt6-base-dev qt6-multimedia-dev libarchive-dev libx11-dev libsqlite3-dev libxcb-cursor0 libwayland-dev wayland-protocols pkg-config build-essential libgl1-mesa-dev libxkbcommon-dev bsdextrautils
       - name: Build Linux debug build
         env:
           CONFIG: debug
         run: |
           make clean
-          make -j$(nproc)
+          make -j$(nproc) 2>&1 | tee build_linux.log
+      - name: Print Linux build log on failure
+        if: failure()
+        run: |
+          cat build_linux.log || true
       - name: Archive Linux debug build
         uses: actions/upload-artifact@v4
         with:
@@ -73,7 +81,7 @@ jobs:
           submodules: 'recursive'
       - name: Install dependencies via Homebrew
         run: |
-          HOMEBREW_NO_AUTO_UPDATE=1 brew install qt@6 libarchive pkg-config cmake
+          HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_REQUIRE_TAP_TRUST=1 brew install qt@6 libarchive pkg-config cmake
           echo "/opt/homebrew/opt/qt@6/bin" >> $GITHUB_PATH
           echo "PKG_CONFIG_PATH=/opt/homebrew/opt/libarchive/lib/pkgconfig:/opt/homebrew/opt/qt@6/lib/pkgconfig" >> $GITHUB_ENV
           echo "CMAKE_PREFIX_PATH=/opt/homebrew/opt/qt@6" >> $GITHUB_ENV
@@ -84,7 +92,11 @@ jobs:
           CONFIG: debug
         run: |
           make clean
-          make -j$(sysctl -n hw.ncpu)
+          make -j$(sysctl -n hw.ncpu) 2>&1 | tee build_macos.log
+      - name: Print macOS build log on failure
+        if: failure()
+        run: |
+          cat build_macos.log || true
       - name: Archive macOS arm64 debug build
         uses: actions/upload-artifact@v4
         with:

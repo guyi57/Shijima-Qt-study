@@ -67,8 +67,13 @@ jobs:
           CONFIG: release
         run: |
           make clean
-          make -j$(nproc)
+          make -j$(nproc) 2>&1 | tee build_linux.log
           cp -r licenses publish/Linux/release/
+      - name: Print Linux build log on failure
+        if: failure()
+        run: |
+          cat build_linux.log || true
+
       - name: Package Linux Tarball
         run: |
           cd publish/Linux/release

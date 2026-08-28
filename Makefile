@@ -82,8 +82,9 @@ TARGET_LDFLAGS += -Llibshimejifinder/build/unarr -lunarr
 ifeq ($(PLATFORM),Linux)
 QT_LIBS += DBus
 PKG_LIBS := x11
-TARGET_LDFLAGS += -Wl,-R -Wl,$(shell pwd)/publish/Linux/$(CONFIG)
+TARGET_LDFLAGS += -Wl,-R -Wl,$(shell pwd)/publish/Linux/$(CONFIG) -lsqlite3
 endif
+
 
 ifeq ($(PLATFORM),Windows)
 TARGET_LDFLAGS += -lws2_32

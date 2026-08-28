@@ -76,29 +76,24 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y qt6-base-dev qt6-multimedia-dev libarchive-dev libxcb-cursor0 libwayland-dev wayland-protocols pkg-config build-essential
+          sudo apt-get install -y qt6-base-dev qt6-multimedia-dev libarchive-dev libx11-dev libsqlite3-dev libxcb-cursor0 libwayland-dev wayland-protocols pkg-config build-essential libgl1-mesa-dev libxkbcommon-dev
       - name: Build Linux release build
         env:
           CONFIG: release
         run: |
           make clean
           make -j$(nproc)
-          make appimage || true
           cp -r licenses publish/Linux/release/
-      - name: Package Linux
+      - name: Package Linux Tarball
         run: |
-          if ls publish/Linux/release/*.AppImage 1> /dev/null 2>&1; then
-            cp publish/Linux/release/*.AppImage Shijima-Qt-Linux-x86_64.AppImage
-          else
-            cd publish/Linux/release
-            tar -czvf ../../../Shijima-Qt-Linux-x86_64.tar.gz .
-            cd ../../..
-          fi
+          cd publish/Linux/release
+          tar -czvf ../../../Shijima-Qt-Linux-x86_64.tar.gz .
+          cd ../../..
       - name: Archive Linux release build
         uses: actions/upload-artifact@v4
         with:
           name: release-linux-x86_64
-          path: Shijima-Qt-Linux-x86_64.*
+          path: Shijima-Qt-Linux-x86_64.tar.gz
           retention-days: 1
 
   build-macos:
@@ -154,7 +149,7 @@ jobs:
       - name: Prepare Release Assets
         run: |
           mkdir -p final-assets
-          find release-assets -type f \( -name "*.zip" -o -name "*.AppImage" -o -name "*.tar.gz" \) -exec cp {} final-assets/ \;
+          find release-assets -type f \( -name "*.zip" -o -name "*.tar.gz" -o -name "*.AppImage" \) -exec cp {} final-assets/ \;
           ls -la final-assets/
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

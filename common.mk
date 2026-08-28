@@ -11,7 +11,11 @@ export QMAKE
 CONFIG ?= release
 STRIP ?= strip
 PKG_CONFIG ?= pkg-config
-WINDRES ?= $(patsubst %-windres,%-gcc,$(CC))
+ifeq ($(CC),cc)
+WINDRES ?= windres
+else
+WINDRES ?= $(patsubst %-gcc,%-windres,$(patsubst %-g++,%-windres,$(CC)))
+endif
 AR ?= ar
 CMAKE ?= cmake
 
@@ -72,9 +76,11 @@ ifeq ($(PLATFORM),macOS)
 		elif [ -d "/opt/homebrew/opt/qt/lib" ]; then echo "/opt/homebrew/opt/qt/lib"; \
 		elif [ -d "/opt/local/libexec/qt$(QT_VERSION)/lib" ]; then echo "/opt/local/libexec/qt$(QT_VERSION)/lib"; \
 		else echo "/opt/homebrew/opt/qt$(QT_VERSION)/lib"; fi)
-	QT_FRAMEWORKS = $(addsuffix .framework,$(addprefix -I$(QT_MACOS_PATH)/Qt,$(QT_LIBS)))
-	QT_CFLAGS = -F$(QT_MACOS_PATH) $(addsuffix /Versions/Current/Headers,$(QT_FRAMEWORKS))
+	QT_FRAMEWORKS = $(addsuffix .framework/Headers,$(addprefix -I$(QT_MACOS_PATH)/Qt,$(QT_LIBS))) \
+		$(addsuffix .framework/Versions/Current/Headers,$(addprefix -I$(QT_MACOS_PATH)/Qt,$(QT_LIBS)))
+	QT_CFLAGS = -F$(QT_MACOS_PATH) $(QT_FRAMEWORKS)
 	QT_LDFLAGS = -F$(QT_MACOS_PATH) $(addprefix -framework Qt,$(QT_LIBS))
+
 
 else
 	PREFIXED_QT_LIBS = $(addprefix Qt$(QT_VERSION),$(QT_LIBS))

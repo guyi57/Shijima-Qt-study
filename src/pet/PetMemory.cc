@@ -1,4 +1,5 @@
 #include "PetMemory.hpp"
+#include "SettingsDb.hpp"
 #include <QFile>
 #include <QJsonDocument>
 #include <QDateTime>
@@ -22,7 +23,24 @@ void PetMemory::load(const QString &filePath)
     m_filePath = filePath;
     m_items.clear();
 
-    QFile file(filePath);
+    auto db = SettingsDb::instance();
+    if (db->contains("pet.memories_json")) {
+        QJsonArray memArray = db->getJsonArray("pet.memories_json");
+        for (const auto &val : memArray) {
+            QJsonObject obj = val.toObject();
+            MemoryItem item;
+            item.id = obj["id"].toString();
+            item.type = obj["type"].toString();
+            item.content = obj["content"].toString();
+            item.importance = obj["importance"].toInt(1);
+            item.createdAt = obj["created_at"].toVariant().toLongLong();
+            m_items.append(item);
+        }
+        return;
+    }
+
+    // 兼容迁移旧文件
+    QFile file(filePath.isEmpty() ? "pet_memory.json" : filePath);
     if (!file.open(QIODevice::ReadOnly)) {
         return;
     }
@@ -46,15 +64,13 @@ void PetMemory::load(const QString &filePath)
         item.createdAt = obj["created_at"].toVariant().toLongLong();
         m_items.append(item);
     }
+    
+    save();
 }
 
-void PetMemory::save(const QString &filePath)
+void PetMemory::save(const QString &/* filePath */)
 {
     QMutexLocker locker(&m_mutex);
-    QString targetPath = filePath.isEmpty() ? m_filePath : filePath;
-    if (targetPath.isEmpty()) targetPath = "memory.json";
-
-    QJsonObject root;
     QJsonArray memArray;
     for (const auto &item : m_items) {
         QJsonObject obj;
@@ -65,13 +81,7 @@ void PetMemory::save(const QString &filePath)
         obj["created_at"] = item.createdAt;
         memArray.append(obj);
     }
-    root["memories"] = memArray;
-
-    QFile file(targetPath);
-    if (file.open(QIODevice::WriteOnly)) {
-        file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
-        file.close();
-    }
+    SettingsDb::instance()->setJsonArray("pet.memories_json", memArray);
 }
 
 void PetMemory::addMemory(const QString &type, const QString &content, int importance)

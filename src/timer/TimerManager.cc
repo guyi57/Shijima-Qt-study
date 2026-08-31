@@ -122,32 +122,45 @@ void TimerManager::calculateNextTrigger(ScheduledTimer &timer) {
     }
 }
 
+#include "SettingsDb.hpp"
+
 void TimerManager::loadTimers() {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_timers.clear();
 
-    QFile file(m_storagePath);
-    if (!file.open(QIODevice::ReadOnly)) {
-        return;
-    }
-
-    QByteArray data = file.readAll();
-    file.close();
-
-    QJsonDocument doc = QJsonDocument::fromJson(data);
-    if (!doc.isArray()) {
-        return;
-    }
-
     qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
-    QJsonArray arr = doc.array();
-    for (auto val : arr) {
-        ScheduledTimer t = ScheduledTimer::fromJson(val.toObject());
-        // 如果是单次任务且已经过期超 1 小时，则自动标记为未启用
-        if (t.repeat == TimerRepeat::Once && t.targetTimestamp < (nowMs - 3600000)) {
-            t.enabled = false;
+    auto db = SettingsDb::instance();
+
+    if (db->contains("timer.scheduled_list")) {
+        QJsonArray arr = db->getJsonArray("timer.scheduled_list");
+        for (auto val : arr) {
+            ScheduledTimer t = ScheduledTimer::fromJson(val.toObject());
+            if (t.repeat == TimerRepeat::Once && t.targetTimestamp < (nowMs - 3600000)) {
+                t.enabled = false;
+            }
+            m_timers.append(t);
         }
-        m_timers.append(t);
+        return;
+    }
+
+    // 兼容迁移旧文件
+    QFile file(m_storagePath);
+    if (file.open(QIODevice::ReadOnly)) {
+        QByteArray data = file.readAll();
+        file.close();
+
+        QJsonDocument doc = QJsonDocument::fromJson(data);
+        if (doc.isArray()) {
+            QJsonArray arr = doc.array();
+            for (auto val : arr) {
+                ScheduledTimer t = ScheduledTimer::fromJson(val.toObject());
+                if (t.repeat == TimerRepeat::Once && t.targetTimestamp < (nowMs - 3600000)) {
+                    t.enabled = false;
+                }
+                m_timers.append(t);
+            }
+            saveTimers();
+        }
     }
 }
 
@@ -157,13 +170,7 @@ void TimerManager::saveTimers() {
     for (const auto &t : m_timers) {
         arr.append(t.toJson());
     }
-
-    QJsonDocument doc(arr);
-    QFile file(m_storagePath);
-    if (file.open(QIODevice::WriteOnly)) {
-        file.write(doc.toJson(QJsonDocument::Indented));
-        file.close();
-    }
+    SettingsDb::instance()->setJsonArray("timer.scheduled_list", arr);
 }
 
 QString TimerManager::addTimer(ScheduledTimer timer) {

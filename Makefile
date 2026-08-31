@@ -22,6 +22,7 @@ PLATFORM_SYSTEM_SOURCES = src/system/HotkeyManager_linux.cc \
 endif
 
 SOURCES = src/main.cc \
+	src/core/SettingsDb.cc \
 	src/core/Asset.cc \
 	src/core/MascotData.cc \
 	src/core/AssetLoader.cc \

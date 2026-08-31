@@ -9,6 +9,8 @@
 #include <QFile>
 #include <QMutex>
 
+#include "SettingsDb.hpp"
+
 struct MessageHistoryItem {
     QString id;
     QString type;       // "agent_task", "translate", "ask", "notice"
@@ -31,8 +33,8 @@ public:
         MessageHistoryItem item;
         item.id = QString::number(QDateTime::currentMSecsSinceEpoch());
         item.type = type;
-        item.title = title.trimmed().isEmpty() ? "桌面消息" : title.trimmed();
-        item.content = content.trimmed();
+        item.title = title;
+        item.content = content;
         item.appTarget = appTarget;
         item.timestamp = QDateTime::currentMSecsSinceEpoch();
 
@@ -54,16 +56,13 @@ public:
         save();
     }
 
-    void load(const QString &path = "message_history.json") {
+    void load(const QString &/* path */ = "") {
         QMutexLocker locker(&m_mutex);
-        m_filePath = path;
-        QFile file(path);
-        if (!file.open(QIODevice::ReadOnly)) return;
+        m_items.clear();
 
-        auto doc = QJsonDocument::fromJson(file.readAll());
-        if (doc.isArray()) {
-            m_items.clear();
-            for (auto v : doc.array()) {
+        auto db = SettingsDb::instance();
+        if (db->contains("ui.message_history")) {
+            for (auto v : db->getJsonArray("ui.message_history")) {
                 auto obj = v.toObject();
                 MessageHistoryItem item;
                 item.id = obj["id"].toString();
@@ -74,13 +73,32 @@ public:
                 item.timestamp = obj["timestamp"].toVariant().toLongLong();
                 m_items.append(item);
             }
+            return;
+        }
+
+        // 尝试从旧文件做一次迁移
+        QFile file("message_history.json");
+        if (file.open(QIODevice::ReadOnly)) {
+            auto doc = QJsonDocument::fromJson(file.readAll());
+            if (doc.isArray()) {
+                for (auto v : doc.array()) {
+                    auto obj = v.toObject();
+                    MessageHistoryItem item;
+                    item.id = obj["id"].toString();
+                    item.type = obj["type"].toString();
+                    item.title = obj["title"].toString();
+                    item.content = obj["content"].toString();
+                    item.appTarget = obj["appTarget"].toString();
+                    item.timestamp = obj["timestamp"].toVariant().toLongLong();
+                    m_items.append(item);
+                }
+                save();
+            }
+            file.close();
         }
     }
 
-    void save(const QString &path = "") {
-        QString targetPath = path.isEmpty() ? m_filePath : path;
-        if (targetPath.isEmpty()) targetPath = "message_history.json";
-
+    void save(const QString &/* path */ = "") {
         QJsonArray arr;
         for (const auto &item : m_items) {
             QJsonObject obj;
@@ -92,20 +110,14 @@ public:
             obj["timestamp"] = item.timestamp;
             arr.append(obj);
         }
-
-        QFile file(targetPath);
-        if (file.open(QIODevice::WriteOnly)) {
-            file.write(QJsonDocument(arr).toJson(QJsonDocument::Indented));
-            file.close();
-        }
+        SettingsDb::instance()->setJsonArray("ui.message_history", arr);
     }
 
 private:
     MessageHistoryManager() {
-        load("message_history.json");
+        load();
     }
 
     QMutex m_mutex;
     QList<MessageHistoryItem> m_items;
-    QString m_filePath = "message_history.json";
 };

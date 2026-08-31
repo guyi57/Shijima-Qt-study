@@ -11,6 +11,7 @@
 #include "MusicPlayerDialog.hpp"
 #include "MusicApiService.hpp"
 #include "MusicFavoriteDb.hpp"
+#include "SettingsDb.hpp"
 #include <QDateTime>
 #include <QNetworkAccessManager>
 #include <QNetworkRequest>
@@ -446,63 +447,80 @@ AipyAdapter *AgentService::aipyAdapter() const {
 }
 
 void AgentService::loadConfig(QString const& path) {
-    QFile file(path);
-    if (!file.exists()) {
-        saveConfig(path);
-        return;
-    }
-    if (file.open(QIODevice::ReadOnly)) {
-        auto doc = QJsonDocument::fromJson(file.readAll());
-        if (doc.isObject()) {
-            auto obj = doc.object();
-            if (obj.contains("api_base")) m_config.apiBase = obj["api_base"].toString();
-            if (obj.contains("api_key")) m_config.apiKey = obj["api_key"].toString();
-            if (obj.contains("model")) m_config.model = obj["model"].toString();
-            if (obj.contains("max_memory_turns")) m_config.maxMemoryTurns = obj["max_memory_turns"].toInt(6);
-            if (obj.contains("hotkey_translate")) m_config.hotkeyTranslate = obj["hotkey_translate"].toString("Option+T");
-            if (obj.contains("hotkey_ask")) m_config.hotkeyAsk = obj["hotkey_ask"].toString("Option+Q");
+    auto db = SettingsDb::instance();
 
-            if (obj.contains("hotkey_music_toggle")) m_config.hotkeyMusicToggle = obj["hotkey_music_toggle"].toString("Option+M");
-            if (obj.contains("hotkey_music_play_pause")) m_config.hotkeyMusicPlayPause = obj["hotkey_music_play_pause"].toString("Option+Space");
-            if (obj.contains("hotkey_music_next")) m_config.hotkeyMusicNext = obj["hotkey_music_next"].toString("Option+Right");
-            if (obj.contains("hotkey_music_prev")) m_config.hotkeyMusicPrev = obj["hotkey_music_prev"].toString("Option+Left");
-            if (obj.contains("hotkey_music_fav")) m_config.hotkeyMusicFav = obj["hotkey_music_fav"].toString("Option+L");
+    // 检查数据库中是否已有设置。如果没有，且存在旧文件，尝试从旧文件做一次无缝迁移
+    if (!db->contains("agent.api_base") && !db->contains("agent.model")) {
+        QFile file(path.isEmpty() ? "config.json" : path);
+        if (file.exists() && file.open(QIODevice::ReadOnly)) {
+            auto doc = QJsonDocument::fromJson(file.readAll());
+            if (doc.isObject()) {
+                auto obj = doc.object();
+                if (obj.contains("api_base")) m_config.apiBase = obj["api_base"].toString();
+                if (obj.contains("api_key")) m_config.apiKey = obj["api_key"].toString();
+                if (obj.contains("model")) m_config.model = obj["model"].toString();
+                if (obj.contains("max_memory_turns")) m_config.maxMemoryTurns = obj["max_memory_turns"].toInt(6);
+                if (obj.contains("hotkey_translate")) m_config.hotkeyTranslate = obj["hotkey_translate"].toString("Option+T");
+                if (obj.contains("hotkey_ask")) m_config.hotkeyAsk = obj["hotkey_ask"].toString("Option+Q");
 
-            if (obj.contains("active_agent_type")) m_config.activeAgentType = obj["active_agent_type"].toString("aipy");
-            if (obj.contains("aipy_base")) m_config.aipyBase = obj["aipy_base"].toString("http://127.0.0.1:41970");
-            if (obj.contains("aipy_key")) m_config.aipyKey = obj["aipy_key"].toString("");
-            if (obj.contains("routing_mode")) m_config.routingMode = obj["routing_mode"].toString("AUTO");
+                if (obj.contains("hotkey_music_toggle")) m_config.hotkeyMusicToggle = obj["hotkey_music_toggle"].toString("Option+M");
+                if (obj.contains("hotkey_music_play_pause")) m_config.hotkeyMusicPlayPause = obj["hotkey_music_play_pause"].toString("Option+Space");
+                if (obj.contains("hotkey_music_next")) m_config.hotkeyMusicNext = obj["hotkey_music_next"].toString("Option+Right");
+                if (obj.contains("hotkey_music_prev")) m_config.hotkeyMusicPrev = obj["hotkey_music_prev"].toString("Option+Left");
+                if (obj.contains("hotkey_music_fav")) m_config.hotkeyMusicFav = obj["hotkey_music_fav"].toString("Option+L");
+
+                if (obj.contains("active_agent_type")) m_config.activeAgentType = obj["active_agent_type"].toString("aipy");
+                if (obj.contains("aipy_base")) m_config.aipyBase = obj["aipy_base"].toString("http://127.0.0.1:41970");
+                if (obj.contains("aipy_key")) m_config.aipyKey = obj["aipy_key"].toString("");
+                if (obj.contains("routing_mode")) m_config.routingMode = obj["routing_mode"].toString("AUTO");
+            }
+            file.close();
+            saveConfig();
+        } else {
+            saveConfig();
         }
-        file.close();
+    } else {
+        // 从 SQLite 数据库读取配置
+        m_config.apiBase = db->get("agent.api_base", "https://api.openai.com/v1");
+        m_config.apiKey = db->get("agent.api_key", "");
+        m_config.model = db->get("agent.model", "gpt-4o-mini");
+        m_config.maxMemoryTurns = db->getInt("agent.max_memory_turns", 6);
+        m_config.hotkeyTranslate = db->get("hotkey.translate", "Option+T");
+        m_config.hotkeyAsk = db->get("hotkey.ask", "Option+Q");
+
+        m_config.hotkeyMusicToggle = db->get("hotkey.music_toggle", "Option+M");
+        m_config.hotkeyMusicPlayPause = db->get("hotkey.music_play_pause", "Option+Space");
+        m_config.hotkeyMusicNext = db->get("hotkey.music_next", "Option+Right");
+        m_config.hotkeyMusicPrev = db->get("hotkey.music_prev", "Option+Left");
+        m_config.hotkeyMusicFav = db->get("hotkey.music_fav", "Option+L");
+
+        m_config.activeAgentType = db->get("agent.active_type", "aipy");
+        m_config.aipyBase = db->get("agent.aipy_base", "http://127.0.0.1:41970");
+        m_config.aipyKey = db->get("agent.aipy_key", "");
+        m_config.routingMode = db->get("agent.routing_mode", "AUTO");
     }
     syncAdapterConfigs();
 }
 
-void AgentService::saveConfig(QString const& path) {
-    QJsonObject obj;
-    obj["api_base"] = m_config.apiBase;
-    obj["api_key"] = m_config.apiKey;
-    obj["model"] = m_config.model;
-    obj["max_memory_turns"] = m_config.maxMemoryTurns;
-    obj["hotkey_translate"] = m_config.hotkeyTranslate;
-    obj["hotkey_ask"] = m_config.hotkeyAsk;
+void AgentService::saveConfig(QString const& /* path */) {
+    auto db = SettingsDb::instance();
+    db->set("agent.api_base", m_config.apiBase);
+    db->set("agent.api_key", m_config.apiKey);
+    db->set("agent.model", m_config.model);
+    db->setInt("agent.max_memory_turns", m_config.maxMemoryTurns);
+    db->set("hotkey.translate", m_config.hotkeyTranslate);
+    db->set("hotkey.ask", m_config.hotkeyAsk);
 
-    obj["hotkey_music_toggle"] = m_config.hotkeyMusicToggle;
-    obj["hotkey_music_play_pause"] = m_config.hotkeyMusicPlayPause;
-    obj["hotkey_music_next"] = m_config.hotkeyMusicNext;
-    obj["hotkey_music_prev"] = m_config.hotkeyMusicPrev;
-    obj["hotkey_music_fav"] = m_config.hotkeyMusicFav;
+    db->set("hotkey.music_toggle", m_config.hotkeyMusicToggle);
+    db->set("hotkey.music_play_pause", m_config.hotkeyMusicPlayPause);
+    db->set("hotkey.music_next", m_config.hotkeyMusicNext);
+    db->set("hotkey.music_prev", m_config.hotkeyMusicPrev);
+    db->set("hotkey.music_fav", m_config.hotkeyMusicFav);
 
-    obj["active_agent_type"] = m_config.activeAgentType;
-    obj["aipy_base"] = m_config.aipyBase;
-    obj["aipy_key"] = m_config.aipyKey;
-    obj["routing_mode"] = m_config.routingMode;
-
-    QFile file(path);
-    if (file.open(QIODevice::WriteOnly)) {
-        file.write(QJsonDocument(obj).toJson(QJsonDocument::Indented));
-        file.close();
-    }
+    db->set("agent.active_type", m_config.activeAgentType);
+    db->set("agent.aipy_base", m_config.aipyBase);
+    db->set("agent.aipy_key", m_config.aipyKey);
+    db->set("agent.routing_mode", m_config.routingMode);
 }
 
 void AgentService::setConfig(AgentConfig const& cfg) {
@@ -541,21 +559,24 @@ void AgentService::clearMemory() {
 }
 
 void AgentService::saveMemoryToFile() {
-    QFile file("memory.json");
-    if (file.open(QIODevice::WriteOnly)) {
-        file.write(QJsonDocument(m_history).toJson(QJsonDocument::Indented));
-        file.close();
-    }
+    SettingsDb::instance()->setJsonArray("agent.memory_history", m_history);
 }
 
 void AgentService::loadMemoryFromFile() {
-    QFile file("memory.json");
-    if (file.open(QIODevice::ReadOnly)) {
-        auto doc = QJsonDocument::fromJson(file.readAll());
-        if (doc.isArray()) {
-            m_history = doc.array();
+    auto db = SettingsDb::instance();
+    if (db->contains("agent.memory_history")) {
+        m_history = db->getJsonArray("agent.memory_history");
+    } else {
+        // 尝试从旧文件做一次迁移
+        QFile file("memory.json");
+        if (file.exists() && file.open(QIODevice::ReadOnly)) {
+            auto doc = QJsonDocument::fromJson(file.readAll());
+            if (doc.isArray()) {
+                m_history = doc.array();
+                saveMemoryToFile();
+            }
+            file.close();
         }
-        file.close();
     }
 }
 

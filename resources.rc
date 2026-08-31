@@ -7,13 +7,13 @@ BEGIN
   BEGIN
     BLOCK "080904E4"
     BEGIN
-      VALUE "CompanyName", "pixelomer"
-      VALUE "FileDescription", "Shijima-Qt"
+      VALUE "CompanyName", "guyi"
+      VALUE "FileDescription", "guyi-bot"
       VALUE "FileVersion", "0.1.0"
-      VALUE "InternalName", "shijima-qt"
-      VALUE "LegalCopyright", "Copyright (c) - pixelomer"
-      VALUE "OriginalFilename", "shijima-qt.exe"
-      VALUE "ProductName", "Shijima-Qt"
+      VALUE "InternalName", "guyi-bot"
+      VALUE "LegalCopyright", "Copyright (c) 2026 guyi (Based on Shijima-Qt by pixelomer)"
+      VALUE "OriginalFilename", "guyi-bot.exe"
+      VALUE "ProductName", "guyi-bot"
       VALUE "ProductVersion", "0.1.0"
     END
   END

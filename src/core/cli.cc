@@ -208,7 +208,7 @@ static bool parseAPIResult(httplib::Result const& res) {
 }
 
 static int notRunning() {
-    cerr << "Request failed. Is Shijima-Qt running?" << std::endl;
+    cerr << "Request failed. Is guyi-bot running?" << std::endl;
     return EXIT_FAILURE;
 }
 

@@ -33,9 +33,14 @@ bool MusicFavoriteDb::initDb()
 {
     if (m_sqliteHandle != nullptr) return true;
 
-    QString configDir = QDir::homePath() + "/.config/shijima-qt";
+    QString configDir = QDir::homePath() + "/.config/guyi-bot";
     QDir().mkpath(configDir);
     m_dbPath = configDir + "/pet_music.db";
+
+    QString oldPath = QDir::homePath() + "/.config/shijima-qt/pet_music.db";
+    if (!QFile::exists(m_dbPath) && QFile::exists(oldPath)) {
+        QFile::copy(oldPath, m_dbPath);
+    }
 
     sqlite3 *db = nullptr;
     int rc = sqlite3_open(m_dbPath.toUtf8().constData(), &db);

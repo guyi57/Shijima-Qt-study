@@ -1,5 +1,8 @@
-Shijima-Qt - Cross-platform shimeji simulation app for desktop
-Copyright (C) 2025 pixelomer
+guyi-bot - Intelligent Cross-platform Desktop Mascot Robot
+Copyright (C) 2026 guyi
+
+Based on Shijima-Qt
+Copyright (C) 2023-2025 pixelomer
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by

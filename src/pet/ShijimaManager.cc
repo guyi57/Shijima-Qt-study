@@ -1033,11 +1033,11 @@ void ShijimaManager::updateEnvironment() {
 void ShijimaManager::askClose() {
     setManagerVisible(true);
     QMessageBox msgBox { this };
-    msgBox.setWindowTitle("Close Shijima-Qt");
+    msgBox.setWindowTitle("关闭 guyi-bot");
     msgBox.setIcon(QMessageBox::Icon::Question);
     msgBox.setStandardButtons(QMessageBox::StandardButton::Yes |
         QMessageBox::StandardButton::No);
-    msgBox.setText("Do you want to close Shijima-Qt?");
+    msgBox.setText("确定要退出 guyi-bot 吗？");
     int ret = msgBox.exec();
     if (ret == QMessageBox::Button::Yes) {
         #if defined(__APPLE__)

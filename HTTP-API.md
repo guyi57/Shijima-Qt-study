@@ -1,4 +1,4 @@
-# 🐸 Shijima-Qt API 文档（中文版）
+# 🐸 guyi-bot API 文档（中文版）
 
 **基础地址：** `http://127.0.0.1:32456/guyi/api/v1`
 

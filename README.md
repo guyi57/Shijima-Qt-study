@@ -1,11 +1,11 @@
-# Shijima-Qt 🐾
+# guyi-bot 🐾
 
 <p align="center">
-  <img src="com.pixelomer.ShijimaQt.png" width="128" height="128" alt="Shijima-Qt Logo" />
+  <img src="com.pixelomer.ShijimaQt.png" width="128" height="128" alt="guyi-bot Logo" />
 </p>
 
 <p align="center">
-  <b>融合拟真物理模拟、AI Agent 协同生态、在线音乐工坊与环境感知的跨平台智能桌面电子宠物</b>
+  <b>融合拟真物理模拟、AI Agent 协同生态、在线音乐工坊与环境感知的跨平台智能桌面桌宠机器人</b>
 </p>
 
 <p align="center">
@@ -14,6 +14,14 @@
   <a href="https://music.gdstudio.xyz"><img src="https://img.shields.io/badge/Music-GD%E9%9F%B3%E4%B9%90%E5%8F%B0-ff69b4.svg" alt="GD音乐台"></a>
   <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg" alt="Platform">
 </p>
+
+---
+
+## 📢 致谢与开源声明 (Acknowledgments & License)
+
+- 本项目 **`guyi-bot`** 基于开源项目 [Shijima-Qt](https://github.com/pixelomer/Shijima-Qt)（作者：[@pixelomer](https://github.com/pixelomer)）进行二次开发与深度定制扩展。
+- 感谢原作者的优秀工作与开源精神。本项目遵循 **GNU General Public License v3.0 (GPLv3)** 开源发布。
+- 本项目是在原 Shijima-Qt 基础框架上扩展了 AI Agent 协议适配、在线音乐工坊、定时任务番茄钟、状态胶囊、物理抛飞增强及桌面快捷交互。
 
 ---
 
@@ -52,11 +60,11 @@
 项目源码全面归整于 `src/` 分层模块目录下：
 
 ```text
-xuanfu/
+guyi-bot/
 ├── src/
 │   ├── main.cc                                # 应用程序统一主入口
 │   ├── core/                                  # 核心资产加载、XML 解析、默认形象、音频管理、CLI
-│   ├── pet/                                   # 桌宠实体 (ShijimaWidget)、行为树、情绪状态、记忆、事件总线
+│   ├── pet/                                   # 桌宠实体、行为树、情绪状态、记忆、事件总线
 │   ├── agent/                                 # AI Agent 服务、aipy-pro 适配器、RESTful HTTP API
 │   ├── music/                                 # 音乐工坊、GD音乐台 API 客户端、SQLite 收藏库、播放控制
 │   ├── timer/                                 # 定时任务、倒计时调度与管理界面
@@ -102,7 +110,7 @@ make -j$(sysctl -n hw.ncpu)
 make macapp
 
 # 产物位于：
-# publish/macOS/release/Shijima-Qt.app
+# publish/macOS/release/guyi-bot.app
 ```
 
 ### 2. Linux 环境构建
@@ -115,7 +123,8 @@ make CONFIG=release
 
 ## 📄 开源许可与致谢
 
-* **基础项目源自**：[Shijima-Qt](https://getshijima.app) (Copyright © pixelomer)
-* **本项目地址**：[guyi57/Shijima-Qt-study](https://github.com/guyi57/Shijima-Qt-study)
+* **项目名称**：guyi-bot
+* **基础项目源自**：[Shijima-Qt](https://github.com/pixelomer/Shijima-Qt) (Copyright © 2023-2025 pixelomer)
+* **二次开发作者**：guyi (Copyright © 2026 guyi)
 * **音乐服务出处**：本软件在线音乐功能由 **[GD音乐台 (music.gdstudio.xyz)](https://music.gdstudio.xyz)** 提供数据与 API 技术支持。
 * **开源协议**：本项目依据 [GNU General Public License v3.0 (GPLv3)](LICENSE) 协议开源发布。

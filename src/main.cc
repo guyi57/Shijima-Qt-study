@@ -40,8 +40,8 @@ int main(int argc, char **argv) {
         shijima::set_log_level(SHIJIMA_LOG_PARSER | SHIJIMA_LOG_WARNINGS);
     #endif
     QApplication app(argc, argv);
-    app.setApplicationName("Shijima-Qt");
-    app.setApplicationDisplayName("Shijima-Qt");
+    app.setApplicationName("guyi-bot");
+    app.setApplicationDisplayName("guyi-bot");
     app.setQuitOnLastWindowClosed(false);
     try {
         httplib::Client pingClient { "http://127.0.0.1:32456" };
@@ -49,7 +49,7 @@ int main(int argc, char **argv) {
         pingClient.set_read_timeout(0, 500000);
         auto pingResult = pingClient.Get("/guyi/api/v1/ping");
         if (pingResult != nullptr && pingResult->status == 200) {
-            throw std::runtime_error("Shijima-Qt is already running!");
+            throw std::runtime_error("guyi-bot is already running!");
         }
         auto manager = ShijimaManager::defaultManager();
         if (manager->mascots().empty() && !manager->loadedMascots().isEmpty()) {
@@ -69,7 +69,7 @@ int main(int argc, char **argv) {
     }
     catch (std::exception &ex) {
         QMessageBox *msg = new QMessageBox {};
-        msg->setText("Shijima-Qt failed to start. Reason: " +
+        msg->setText("guyi-bot failed to start. Reason: " +
             QString::fromUtf8(ex.what()));
         msg->setStandardButtons(QMessageBox::StandardButton::Close);
         msg->setAttribute(Qt::WA_DeleteOnClose);

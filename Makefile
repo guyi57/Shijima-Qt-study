@@ -163,7 +163,8 @@ publish/macOS/$(CONFIG): shijima-qt$(EXE)
 	$(call copy_changed,libshimejifinder/build/unarr/libunarr.1.dylib,$@)
 	$(call copy_changed,$<,$@)
 	if [ $(CONFIG) = release ]; then $(STRIP) -S $@/libunarr.1.dylib; fi
-	install_name_tool -add_rpath "$$(realpath $@)" $@/$<
+	install_name_tool -add_rpath "@loader_path" $@/$< 2>/dev/null || true
+	install_name_tool -add_rpath "$$(realpath $@)" $@/$< 2>/dev/null || true
 
 publish/Linux/$(CONFIG): shijima-qt$(EXE)
 	mkdir -p $@
@@ -198,6 +199,11 @@ shijima-qt$(EXE): shijima-qt.a Platform/Platform.a libshimejifinder/build/libshi
 	$(CXX) -o $@ $(LD_COPY_NEEDED) $(LD_WHOLE_ARCHIVE) $^ $(LD_NO_WHOLE_ARCHIVE) \
 		$(TARGET_LDFLAGS) $(LDFLAGS)
 	if [ $(CONFIG) = "release" ]; then $(STRIP) $@; fi
+	if [ "$$(uname -s)" = "Darwin" ]; then \
+		install_name_tool -add_rpath "@loader_path" $@ 2>/dev/null || true; \
+		install_name_tool -add_rpath "@loader_path/libshimejifinder/build/unarr" $@ 2>/dev/null || true; \
+		cp libshimejifinder/build/unarr/libunarr.1.dylib ./ 2>/dev/null || true; \
+	fi
 
 libshijima/build/libshijima.a: libshijima/build/Makefile
 	$(MAKE) -C libshijima/build

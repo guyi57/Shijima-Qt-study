@@ -832,12 +832,31 @@ ShijimaManager::ShijimaManager(QWidget *parent):
     if (!mascotsDir.exists()) {
         mascotsDir.mkpath(mascotsPath);
     }
+
+    // 自动平滑迁移旧版 Shijima-Qt 自定义桌宠皮肤数据
+    QString oldDataPath = dataPath;
+    oldDataPath.replace("guyi-bot", "Shijima-Qt");
+    QString oldMascotsPath = QDir::cleanPath(oldDataPath + QDir::separator() + "mascots");
+    QDir oldMascotsDir(oldMascotsPath);
+    if (oldMascotsDir.exists() && oldMascotsPath != mascotsPath) {
+        for (const auto &entry : oldMascotsDir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot)) {
+            QString destEntry = mascotsPath + QDir::separator() + entry.fileName();
+            if (!QDir(destEntry).exists() && !QFile::exists(destEntry)) {
+                QDir().mkpath(destEntry);
+                QDir sourceSubDir(entry.absoluteFilePath());
+                for (const auto &f : sourceSubDir.entryInfoList(QDir::Files)) {
+                    QFile::copy(f.absoluteFilePath(), destEntry + QDir::separator() + f.fileName());
+                }
+            }
+        }
+    }
+
     if (QFile readme { mascotsDir.absoluteFilePath("README.txt") };
         readme.open(QFile::WriteOnly | QFile::NewOnly | QFile::Text))
     {
         readme.write(""
 "Manually importing shimeji by copying its contents into this folder may\n"
-"cause problems. You should use the import dialog in Shijima-Qt unless you\n"
+"cause problems. You should use the import dialog in guyi-bot unless you\n"
 "have a good reason not to.\n"
         );
         readme.close();

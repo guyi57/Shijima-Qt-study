@@ -23,6 +23,14 @@ TimerManager::TimerManager() {
     }
     m_storagePath = appData + "/timers.json";
 
+    if (!QFile::exists(m_storagePath)) {
+        QString oldAppData = appData;
+        oldAppData.replace("guyi-bot", "Shijima-Qt");
+        if (QFile::exists(oldAppData + "/timers.json") && oldAppData != appData) {
+            QFile::copy(oldAppData + "/timers.json", m_storagePath);
+        }
+    }
+
     loadTimers();
 
     m_tickTimer = new QTimer();

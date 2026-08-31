@@ -200,11 +200,12 @@ libshijima/build/libshijima.a: libshijima/build/Makefile
 	$(MAKE) -C libshijima/build
 
 src/core/DefaultMascot.cc: $(DEFAULT_MASCOT_FILES) Makefile bundle-default.sh
-	./bundle-default.sh $(DEFAULT_MASCOT_FILES) > '$@-'
+	python3 ./bundle-default.sh $(DEFAULT_MASCOT_FILES) > '$@-'
 	mv '$@-' '$@'
 
-src/ui/ShijimaLicensesDialog.cc: licenses_generated.hpp
-	touch src/ui/ShijimaLicensesDialog.cc
+src/core/DefaultMascot.o: src/core/DefaultMascot.cc
+
+src/ui/ShijimaLicensesDialog.o: licenses_generated.hpp
 
 licenses_generated.hpp: $(LICENSE_FILES) Makefile
 	echo 'static const char *shijima_licenses = R"SHIJIMA_LIC(' > licenses_generated.hpp
@@ -223,8 +224,7 @@ licenses_generated.hpp: $(LICENSE_FILES) Makefile
 	echo ')SHIJIMA_LIC";' >> licenses_generated.hpp
 
 
-src/ui/ShijimaApiDialog.cc: api_doc_generated.hpp
-	touch src/ui/ShijimaApiDialog.cc
+src/ui/ShijimaApiDialog.o: api_doc_generated.hpp
 
 api_doc_generated.hpp: $(API_DOC_FILES) Makefile
 	echo 'static const char *shijima_api_doc = R"SHIJIMA_API_DOC(' > api_doc_generated.hpp
@@ -236,12 +236,12 @@ api_doc_generated.hpp: $(API_DOC_FILES) Makefile
 
 
 libshijima/build/Makefile: libshijima/CMakeLists.txt FORCE
-	mkdir -p libshijima/build && cd libshijima/build && $(CMAKE) $(CMAKEFLAGS) -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_CXX_FLAGS="-DSHIJIMA_DUK_STATIC_BUILD -Wno-error" -DSHIJIMA_BUILD_EXAMPLES=NO ..
+	mkdir -p libshijima/build && cd libshijima/build && $(CMAKE) $(CMAKEFLAGS) -DCMAKE_CXX_FLAGS="-DSHIJIMA_DUK_STATIC_BUILD -Wno-error" -DSHIJIMA_BUILD_EXAMPLES=NO ..
 
 libshimejifinder/build/Makefile: libshimejifinder/CMakeLists.txt FORCE
 	mkdir -p libshimejifinder/build && cd libshimejifinder/build && \
 		PKG_CONFIG_PATH="/opt/homebrew/opt/libarchive/lib/pkgconfig:$$PKG_CONFIG_PATH" \
-		$(CMAKE) $(CMAKEFLAGS) -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+		$(CMAKE) $(CMAKEFLAGS) \
 		-DSHIMEJIFINDER_BUILD_LIBARCHIVE=NO -DSHIMEJIFINDER_BUILD_EXAMPLES=NO ..
 
 

@@ -61,6 +61,7 @@ jobs:
         env:
           CONFIG: debug
         run: |
+          set -e -o pipefail
           make clean
           make -j$(nproc) 2>&1 | tee build_linux.log
       - name: Print Linux build log on failure

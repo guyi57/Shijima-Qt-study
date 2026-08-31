@@ -18,11 +18,8 @@ Linux.a: $(OBJECTS)
 gnome_script.zip: .work/gnome_script
 	python3 -c 'import zipfile, os; z=zipfile.ZipFile("gnome_script.zip", "w", zipfile.ZIP_DEFLATED); [z.write(os.path.join(".work/gnome_script", f), f) for f in os.listdir(".work/gnome_script")]'
 
-GNOMEWindowObserverBackend.cc: gnome_script.c
-	touch $@
-
-KDEWindowObserverBackend.cc: kwin_script.c
-	touch $@
+GNOMEWindowObserverBackend.o: gnome_script.c
+KDEWindowObserverBackend.o: kwin_script.c
 
 .work/gnome_script: gnome_script/metadata.json gnome_script/extension_minified.js
 	rm -rf "$@"

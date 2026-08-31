@@ -66,6 +66,7 @@ jobs:
         env:
           CONFIG: release
         run: |
+          set -e -o pipefail
           make clean
           make -j$(nproc) 2>&1 | tee build_linux.log
           cp -r licenses publish/Linux/release/

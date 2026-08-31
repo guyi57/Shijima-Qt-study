@@ -1164,17 +1164,20 @@ void AgentService::handleAgentStatus(AgentStatusEvent const& event, std::functio
         }
     }
 
-    auto showBubbleAndHistory = [event](QString const& speechText, int duration) {
-        auto const& mascots = ShijimaManager::defaultManager()->mascots();
-        if (!mascots.empty()) {
-            mascots.front()->showMessage(speechText, duration, event.agentName);
-        }
-        MessageHistoryManager::instance()->addRecord(
-            "agent_task", 
-            QString("【%1】%2").arg(event.agentName, event.status), 
-            speechText, 
-            event.agentName
-        );
+    auto showBubbleAndHistory = [event, cmd](QString const& speechText, int duration) {
+        ShijimaManager::defaultManager()->onTickSync([event, cmd, speechText, duration](ShijimaManager *manager) {
+            auto const& mascots = manager->mascots();
+            if (!mascots.empty()) {
+                mascots.front()->doAction(cmd);
+                mascots.front()->showMessage(speechText, duration, event.agentName);
+            }
+            MessageHistoryManager::instance()->addRecord(
+                "agent_task", 
+                QString("【%1】%2").arg(event.agentName, event.status), 
+                speechText, 
+                event.agentName
+            );
+        });
     };
 
     // 2. 播报文本生成（Token 省流判断）
@@ -1201,17 +1204,13 @@ void AgentService::handleAgentStatus(AgentStatusEvent const& event, std::functio
         ).arg(event.agentName, (event.status == "finished" ? "完成" : "报错中断"), event.task, event.details);
         messages.append(userMsg);
 
-        sendChatCompletion(messages, [event, cmd, duration, showBubbleAndHistory, callback](bool ok, QString const& llmReply) {
+        sendChatCompletion(messages, [event, duration, showBubbleAndHistory, callback](bool ok, QString const& llmReply) {
             QString outAction;
             QString cleanText;
             PersonaManager::parseActionAndContent(llmReply, outAction, cleanText);
             
             QString finalSpeech = ok ? cleanText : PersonaManager::instance()->renderStatusNarration(event.agentName, event.status, event.task, event.details);
             
-            auto const& mascots = ShijimaManager::defaultManager()->mascots();
-            if (!mascots.empty()) {
-                mascots.front()->doAction(cmd);
-            }
             showBubbleAndHistory(finalSpeech, duration);
             if (callback) callback(true, "已执行状态感知与 AI 播报");
         });
@@ -1223,10 +1222,6 @@ void AgentService::handleAgentStatus(AgentStatusEvent const& event, std::functio
         event.agentName, event.status, event.task, event.details
     );
 
-    auto const& mascots = ShijimaManager::defaultManager()->mascots();
-    if (!mascots.empty()) {
-        mascots.front()->doAction(cmd);
-    }
     showBubbleAndHistory(localSpeech, duration);
 
     if (callback) callback(true, "已执行本地 0-Token 状态感知与动作联动");

@@ -454,10 +454,8 @@ ShijimaHttpApi::ShijimaHttpApi(ShijimaManager *manager): m_server(new Server),
         sendJson(res, responseObj);
     });
 
-    // POST /guyi/api/v1/actions - 直接下发高阶动作
-    m_server->Post("/guyi/api/v1/actions",
-        [this](Request const& req, Response &res)
-    {
+    // POST 动作与气泡广播接口 (支持 /guyi/api/v1/actions, /guyi/api/v1/broadcast, /api/pet/action 等)
+    auto handleActionRequest = [this](Request const& req, Response &res) {
         QJsonObject responseObj;
         auto doc = QJsonDocument::fromJson(QByteArray(req.body.c_str(), req.body.size()));
         if (!doc.isObject()) {
@@ -469,10 +467,23 @@ ShijimaHttpApi::ShijimaHttpApi(ShijimaManager *manager): m_server(new Server),
         }
 
         auto root = doc.object();
-        QString actionStr = root["action"].toString("idle").toLower();
-        QString speech = root["speech"].toString();
-        int duration = root["duration"].toInt(4000);
-        QString appTarget = root["appTarget"].toString();
+        QString actionStr = root.contains("action") ? root["action"].toString() : root["act"].toString("idle");
+        actionStr = actionStr.toLower().trimmed();
+
+        QString speech;
+        if (root.contains("speech")) speech = root["speech"].toString();
+        else if (root.contains("text")) speech = root["text"].toString();
+        else if (root.contains("message")) speech = root["message"].toString();
+        else if (root.contains("content")) speech = root["content"].toString();
+
+        int duration = 4000;
+        if (root.contains("duration")) duration = root["duration"].toInt(4000);
+        else if (root.contains("duration_ms")) duration = root["duration_ms"].toInt(4000);
+
+        QString appTarget;
+        if (root.contains("appTarget")) appTarget = root["appTarget"].toString();
+        else if (root.contains("app_target")) appTarget = root["app_target"].toString();
+        else if (root.contains("agent_name")) appTarget = root["agent_name"].toString();
 
         PetActionCommand cmd;
         cmd.speechText = speech;
@@ -488,6 +499,7 @@ ShijimaHttpApi::ShijimaHttpApi(ShijimaManager *manager): m_server(new Server),
         else if (actionStr == "angry") cmd.type = PetActionType::Angry;
         else if (actionStr == "follow") cmd.type = PetActionType::FollowCursor;
         else if (actionStr == "talk") cmd.type = PetActionType::Talk;
+        else if (actionStr == "idle") cmd.type = PetActionType::Idle;
         else {
             cmd.type = PetActionType::CustomBehavior;
             cmd.customBehaviorName = root["action"].toString();
@@ -502,10 +514,16 @@ ShijimaHttpApi::ShijimaHttpApi(ShijimaManager *manager): m_server(new Server),
 
         responseObj["success"] = true;
         sendJson(res, responseObj);
-    });
+    };
+
+    m_server->Post("/guyi/api/v1/actions", handleActionRequest);
+    m_server->Post("/guyi/api/v1/broadcast", handleActionRequest);
+    m_server->Post("/api/v1/broadcast", handleActionRequest);
+    m_server->Post("/api/pet/action", handleActionRequest);
+    m_server->Post("/api/actions", handleActionRequest);
 
     // 接收 Coding Agent 状态感知（生命周期、动作与播报）
-    m_server->Post("/api/agent/status", [](const Request &req, Response &res) {
+    auto handleStatusRequest = [](const Request &req, Response &res) {
         QJsonObject responseObj;
         auto doc = QJsonDocument::fromJson(QByteArray(req.body.c_str(), req.body.size()));
         if (!doc.isObject()) {
@@ -530,10 +548,13 @@ ShijimaHttpApi::ShijimaHttpApi(ShijimaManager *manager): m_server(new Server),
         responseObj["success"] = true;
         responseObj["message"] = "Agent status received and processed";
         sendJson(res, responseObj);
-    });
+    };
+
+    m_server->Post("/api/agent/status", handleStatusRequest);
+    m_server->Post("/guyi/api/v1/agent/status", handleStatusRequest);
 
     // 查询当前感知的 Coding Agent 状态
-    m_server->Get("/api/agent/status", [](const Request &, Response &res) {
+    auto handleGetStatus = [](const Request &, Response &res) {
         QJsonObject responseObj;
         auto last = AgentService::instance()->lastAgentStatus();
         responseObj["success"] = true;
@@ -543,7 +564,10 @@ ShijimaHttpApi::ShijimaHttpApi(ShijimaManager *manager): m_server(new Server),
         responseObj["details"] = last.details;
         responseObj["timestamp"] = last.timestamp;
         sendJson(res, responseObj);
-    });
+    };
+
+    m_server->Get("/api/agent/status", handleGetStatus);
+    m_server->Get("/guyi/api/v1/agent/status", handleGetStatus);
 
     // 查询所有可用人格列表与当前激活的人格
     m_server->Get("/api/persona/list", [](const Request &, Response &res) {

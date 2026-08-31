@@ -3,7 +3,8 @@ include ../../common.mk
 SOURCES = Platform.cc ActiveWindowObserver.cc KWin.cc PrivateActiveWindowObserver.cc \
 	DBus.cc GNOME.cc GNOMEWindowObserverBackend.cc KDEWindowObserverBackend.cc \
 	ExtensionFile.cc
-QT_LIBS = Core DBus Widgets
+QT_LIBS = Core DBus Gui Widgets
+PKG_LIBS = x11
 
 define bin2c
 python3 -c 'import sys, os; f=open(sys.argv[1], "rb"); d=f.read(); var=os.path.splitext(os.path.basename(sys.argv[2]))[0]; hex_lines=["    \"" + "".join(fr"\x{b:02X}" for b in d[i:i+16]) + "\"" for i in range(0, len(d), 16)]; out=open(sys.argv[2], "w"); out.write("#include <stddef.h>\nstatic const char " + var + "[] = \n" + "\n".join(hex_lines) + "\n;\nstatic const size_t " + var + "_len = " + str(len(d)) + ";\n")' $(1) $(2)

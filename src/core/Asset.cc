@@ -64,7 +64,12 @@ void Asset::setImage(QImage const& image) {
     m_image = image.copy(rect);
     m_mirrored = m_image.mirrored(true, false);
 #ifdef __linux__
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+    m_mask = QBitmap::fromImage(m_image.createMaskFromColor(qRgba(0, 0, 0, 0), Qt::MaskOutColor));
+    m_mirroredMask = QBitmap::fromImage(m_mirrored.createMaskFromColor(qRgba(0, 0, 0, 0), Qt::MaskOutColor));
+#else
     m_mask = QBitmap::fromImage(m_image.createAlphaMask());
     m_mirroredMask = QBitmap::fromImage(m_mirrored.createAlphaMask());
+#endif
 #endif
 }

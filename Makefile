@@ -17,7 +17,8 @@ endif
 
 
 ifeq ($(PLATFORM),Linux)
-PLATFORM_SYSTEM_SOURCES = 
+PLATFORM_SYSTEM_SOURCES = src/system/HotkeyManager_linux.cc \
+	src/system/SystemObserver_linux.cc
 endif
 
 SOURCES = src/main.cc \

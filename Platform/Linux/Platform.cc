@@ -25,7 +25,12 @@
 #   include <QApplication>
 #endif
 #include "../Platform.hpp"
-#include <stdlib.h>
+#include <cstdlib>
+#include <cstring>
+#include <cerrno>
+#include <string>
+#include <array>
+#include <system_error>
 #include <QWidget>
 #include <QApplication>
 #include <X11/Xlib.h>

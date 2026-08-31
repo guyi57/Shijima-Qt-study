@@ -13,6 +13,8 @@
 #include "MusicFavoriteDb.hpp"
 #include "SettingsDb.hpp"
 #include "PersonaManager.hpp"
+#include "SkillManager.hpp"
+#include "McpManager.hpp"
 #include "PetAction.hpp"
 #include "MessageHistoryManager.hpp"
 #include "ShijimaWidget.hpp"
@@ -427,6 +429,8 @@ AgentService::AgentService()
     loadConfig();
     loadMemoryFromFile();
     initAdapters();
+    SkillManager::instance()->init();
+    McpManager::instance()->init();
 }
 
 void AgentService::initAdapters() {
@@ -912,11 +916,17 @@ void AgentService::sendChatCompletion(QJsonArray const& messages, std::function<
     root["messages"] = messages;
     root["temperature"] = 0.3;
 
-    // 注入定时器与音乐播放器工具规范
+    // 注入定时器与音乐播放器工具规范 + MCP 外部工具
     QJsonArray toolsArr;
     toolsArr.append(getTimerToolDefinition());
     toolsArr.append(getMusicToolDefinition());
-    root["tools"] = toolsArr;
+    QJsonArray mcpTools = McpManager::instance()->getAllToolDefinitions();
+    for (auto tVal : mcpTools) {
+        toolsArr.append(tVal);
+    }
+    if (!toolsArr.isEmpty()) {
+        root["tools"] = toolsArr;
+    }
 
     QByteArray postData = QJsonDocument(root).toJson();
     QNetworkReply *reply = m_networkManager->post(request, postData);
@@ -977,6 +987,16 @@ void AgentService::sendChatCompletion(QJsonArray const& messages, std::function<
                         });
                         return;
                     }
+                } else if (McpManager::instance()->hasTool(fnName)) {
+                    QString argsStr = fnObj["arguments"].toString();
+                    auto argsDoc = QJsonDocument::fromJson(argsStr.toUtf8());
+                    QJsonObject argsObj = argsDoc.isObject() ? argsDoc.object() : QJsonObject{};
+                    McpManager::instance()->executeToolCall(fnName, argsObj, [callback, fnName](bool success, const QString &result) {
+                        QString formatted = QString("🔌 **MCP 工具 [%1] 执行%2**\n\n```text\n%3\n```")
+                            .arg(fnName, success ? "成功" : "失败", result);
+                        callback(true, formatted);
+                    });
+                    return;
                 }
             }
         }

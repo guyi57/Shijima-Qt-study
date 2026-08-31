@@ -1,5 +1,6 @@
 #include "PersonaManager.hpp"
 #include "SettingsDb.hpp"
+#include "SkillManager.hpp"
 #include <QRegularExpression>
 
 PersonaManager* PersonaManager::instance()
@@ -138,7 +139,8 @@ QString PersonaManager::buildEffectiveSystemPrompt() const
         "示例：'[action:jump] 太棒了！这个 Bug 已经被我们彻底消灭啦喵~'\n"
         "回答请保持精简（通常控制在 50~150 字以内），适合在桌面悬浮气泡中呈现。";
 
-    return basePrompt + actionProtocol;
+    QString skillExtensions = SkillManager::instance()->getSystemPromptExtensions();
+    return basePrompt + skillExtensions + actionProtocol;
 }
 
 void PersonaManager::parseActionAndContent(QString const& rawOutput, QString &outAction, QString &outCleanText)

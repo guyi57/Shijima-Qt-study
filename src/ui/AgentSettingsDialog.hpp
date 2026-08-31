@@ -1,7 +1,7 @@
 #pragma once
 
 // 
-// Shijima-Qt - AI Model, Memory, Agent & Hotkey Settings Dialog
+// guyi-bot - AI Model, Memory, Agent, Skills & MCP Settings Dialog
 // 
 
 #include <QDialog>
@@ -15,6 +15,7 @@
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QListWidget>
 
 class AgentSettingsDialog : public QDialog
 {
@@ -29,6 +30,9 @@ private:
     void testConnection();
     void testAipyConnection();
     void autoDetectAipyKey();
+
+    void refreshSkillsTab();
+    void refreshMcpTab();
 
     // 基础模型配置
     QComboBox *m_presetCombo;
@@ -65,6 +69,18 @@ private:
     QPushButton *m_autoDetectKeyBtn;
     QPushButton *m_testAipyBtn;
     QLabel *m_agentStatusLabel;
+
+    // 🛠️ 技能库 (Skills)
+    QListWidget *m_skillsListWidget;
+    QLabel *m_skillDetailLabel;
+    QPushButton *m_openSkillsDirBtn;
+    QPushButton *m_refreshSkillsBtn;
+
+    // 🔌 MCP 服务
+    QListWidget *m_mcpListWidget;
+    QLabel *m_mcpDetailLabel;
+    QPushButton *m_openMcpConfigBtn;
+    QPushButton *m_reloadMcpBtn;
 
     QPushButton *m_clearMemoryBtn;
     QPushButton *m_saveBtn;

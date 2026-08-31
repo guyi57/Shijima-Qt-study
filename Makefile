@@ -39,6 +39,9 @@ SOURCES = src/main.cc \
 	src/agent/AgentService.cc \
 	src/agent/AipyAdapter.cc \
 	src/agent/PersonaManager.cc \
+	src/agent/SkillManager.cc \
+	src/agent/McpClient.cc \
+	src/agent/McpManager.cc \
 	src/agent/ShijimaHttpApi.cc \
 	src/music/MusicFavoriteDb.cc \
 	src/music/MusicApiService.cc \

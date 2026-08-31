@@ -6,12 +6,16 @@
 #include "AgentService.hpp"
 #include "AipyAdapter.hpp"
 #include "PersonaManager.hpp"
+#include "SkillManager.hpp"
+#include "McpManager.hpp"
 #include <QFormLayout>
 #include <QMessageBox>
 #include <QScreen>
 #include <QGroupBox>
 #include <QGuiApplication>
 #include <QScrollArea>
+#include <QDesktopServices>
+#include <QUrl>
 
 AgentSettingsDialog::AgentSettingsDialog(QWidget *parent)
     : QDialog(parent)
@@ -302,6 +306,78 @@ AgentSettingsDialog::AgentSettingsDialog(QWidget *parent)
     hkLayout->addStretch();
     tabWidget->addTab(hkPage, "⌨️ 快捷键");
 
+    // =========================================================================
+    // 🛠️ TAB 5: 技能库 (Skills)
+    // =========================================================================
+    auto skillsPage = new QWidget(tabWidget);
+    auto skillsLayout = new QVBoxLayout(skillsPage);
+    skillsLayout->setSpacing(10);
+
+    auto skillsTopLayout = new QHBoxLayout();
+    auto skillsTitle = new QLabel("本地已加载技能模块（可勾选启用或停用）:", skillsPage);
+    skillsTitle->setStyleSheet("font-weight: bold; color: #2c3e50; font-size: 13px;");
+    skillsTopLayout->addWidget(skillsTitle);
+    skillsTopLayout->addStretch();
+
+    m_openSkillsDirBtn = new QPushButton("📂 打开技能目录", skillsPage);
+    m_openSkillsDirBtn->setStyleSheet("padding: 4px 10px; border-radius: 4px; border: 1px solid #dcdfe6; background: #f4f4f5; font-size: 12px;");
+    m_openSkillsDirBtn->setCursor(Qt::PointingHandCursor);
+    skillsTopLayout->addWidget(m_openSkillsDirBtn);
+
+    m_refreshSkillsBtn = new QPushButton("🔄 刷新", skillsPage);
+    m_refreshSkillsBtn->setStyleSheet("padding: 4px 10px; border-radius: 4px; border: 1px solid #dcdfe6; background: #f4f4f5; font-size: 12px;");
+    m_refreshSkillsBtn->setCursor(Qt::PointingHandCursor);
+    skillsTopLayout->addWidget(m_refreshSkillsBtn);
+    skillsLayout->addLayout(skillsTopLayout);
+
+    m_skillsListWidget = new QListWidget(skillsPage);
+    m_skillsListWidget->setStyleSheet("border: 1px solid #dcdfe6; border-radius: 6px; padding: 4px; font-size: 13px;");
+    skillsLayout->addWidget(m_skillsListWidget, 1);
+
+    m_skillDetailLabel = new QLabel(skillsPage);
+    m_skillDetailLabel->setStyleSheet("color: #606266; font-size: 12px; background: #f8fafc; padding: 8px; border-radius: 6px; border: 1px solid #e2e8f0;");
+    m_skillDetailLabel->setWordWrap(true);
+    m_skillDetailLabel->setText("点击上方技能项可查看技能详情与提示词。");
+    skillsLayout->addWidget(m_skillDetailLabel);
+
+    tabWidget->addTab(skillsPage, "🛠️ 技能库");
+
+    // =========================================================================
+    // 🔌 TAB 6: MCP 服务 (Model Context Protocol)
+    // =========================================================================
+    auto mcpPage = new QWidget(tabWidget);
+    auto mcpLayout = new QVBoxLayout(mcpPage);
+    mcpLayout->setSpacing(10);
+
+    auto mcpTopLayout = new QHBoxLayout();
+    auto mcpTitle = new QLabel("MCP (Model Context Protocol) 外部服务连接状态:", mcpPage);
+    mcpTitle->setStyleSheet("font-weight: bold; color: #2c3e50; font-size: 13px;");
+    mcpTopLayout->addWidget(mcpTitle);
+    mcpTopLayout->addStretch();
+
+    m_openMcpConfigBtn = new QPushButton("📝 编辑 mcp_servers.json", mcpPage);
+    m_openMcpConfigBtn->setStyleSheet("padding: 4px 10px; border-radius: 4px; border: 1px solid #dcdfe6; background: #f4f4f5; font-size: 12px;");
+    m_openMcpConfigBtn->setCursor(Qt::PointingHandCursor);
+    mcpTopLayout->addWidget(m_openMcpConfigBtn);
+
+    m_reloadMcpBtn = new QPushButton("🔄 重启并重载服务", mcpPage);
+    m_reloadMcpBtn->setStyleSheet("padding: 4px 10px; border-radius: 4px; border: 1px solid #dcdfe6; background: #f4f4f5; font-size: 12px;");
+    m_reloadMcpBtn->setCursor(Qt::PointingHandCursor);
+    mcpTopLayout->addWidget(m_reloadMcpBtn);
+    mcpLayout->addLayout(mcpTopLayout);
+
+    m_mcpListWidget = new QListWidget(mcpPage);
+    m_mcpListWidget->setStyleSheet("border: 1px solid #dcdfe6; border-radius: 6px; padding: 4px; font-size: 13px;");
+    mcpLayout->addWidget(m_mcpListWidget, 1);
+
+    m_mcpDetailLabel = new QLabel(mcpPage);
+    m_mcpDetailLabel->setStyleSheet("color: #606266; font-size: 12px; background: #f8fafc; padding: 8px; border-radius: 6px; border: 1px solid #e2e8f0;");
+    m_mcpDetailLabel->setWordWrap(true);
+    m_mcpDetailLabel->setText("点击上方服务项可查看该服务当前向大模型暴露的 Tool 列表。");
+    mcpLayout->addWidget(m_mcpDetailLabel);
+
+    tabWidget->addTab(mcpPage, "🔌 MCP 服务");
+
     mainLayout->addWidget(tabWidget);
 
     // 底部按钮栏
@@ -327,6 +403,56 @@ AgentSettingsDialog::AgentSettingsDialog(QWidget *parent)
     connect(m_testBtn, &QPushButton::clicked, this, &AgentSettingsDialog::testConnection);
     connect(m_autoDetectKeyBtn, &QPushButton::clicked, this, &AgentSettingsDialog::autoDetectAipyKey);
     connect(m_testAipyBtn, &QPushButton::clicked, this, &AgentSettingsDialog::testAipyConnection);
+
+    connect(m_openSkillsDirBtn, &QPushButton::clicked, this, []() {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(SkillManager::instance()->skillsDirectory()));
+    });
+    connect(m_refreshSkillsBtn, &QPushButton::clicked, this, [this]() {
+        SkillManager::instance()->scanSkills();
+        refreshSkillsTab();
+    });
+    connect(m_skillsListWidget, &QListWidget::itemChanged, this, [](QListWidgetItem *item) {
+        QString skillId = item->data(Qt::UserRole).toString();
+        bool enabled = (item->checkState() == Qt::Checked);
+        SkillManager::instance()->setSkillEnabled(skillId, enabled);
+    });
+    connect(m_skillsListWidget, &QListWidget::currentItemChanged, this, [this](QListWidgetItem *current, QListWidgetItem *) {
+        if (!current) return;
+        QString skillId = current->data(Qt::UserRole).toString();
+        auto skill = SkillManager::instance()->getSkill(skillId);
+        m_skillDetailLabel->setText(QString("📖 <b>%1</b> (作者: %2)<br/>%3<br/><br/><b>Prompt 片段:</b><br/>%4")
+            .arg(skill.name, skill.author, skill.description.isEmpty() ? "暂无描述" : skill.description,
+                 skill.prompt.left(200) + (skill.prompt.length() > 200 ? "..." : "")));
+    });
+
+    connect(m_openMcpConfigBtn, &QPushButton::clicked, this, []() {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(McpManager::instance()->configFilePath()));
+    });
+    connect(m_reloadMcpBtn, &QPushButton::clicked, this, [this]() {
+        McpManager::instance()->reload();
+        refreshMcpTab();
+        QMessageBox::information(this, "MCP 服务", "MCP 服务已触发重新加载与连接！");
+    });
+    connect(m_mcpListWidget, &QListWidget::currentItemChanged, this, [this](QListWidgetItem *current, QListWidgetItem *) {
+        if (!current) return;
+        QString sName = current->data(Qt::UserRole).toString();
+        for (auto c : McpManager::instance()->getClients()) {
+            if (c->serverName() == sName) {
+                QString toolsSummary = QString("🔌 服务: <b>%1</b> | 状态: <b>%2</b><br/>执行命令: <code>%3 %4</code><br/><br/><b>暴露的 Tools 列表:</b><br/>")
+                    .arg(c->serverName(), c->stateString(), c->command(), c->args().join(" "));
+                auto tools = c->tools();
+                if (tools.isEmpty()) {
+                    toolsSummary += "<i>(暂无已注册的工具)</i>";
+                } else {
+                    for (const auto &t : tools) {
+                        toolsSummary += QString("• <b>%1</b>: %2<br/>").arg(t.name, t.description);
+                    }
+                }
+                m_mcpDetailLabel->setText(toolsSummary);
+                return;
+            }
+        }
+    });
 
     connect(m_cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
     connect(m_saveBtn, &QPushButton::clicked, this, &AgentSettingsDialog::saveAndClose);
@@ -393,6 +519,44 @@ void AgentSettingsDialog::refreshValues() {
 
     m_testStatusLabel->clear();
     m_agentStatusLabel->clear();
+
+    refreshSkillsTab();
+    refreshMcpTab();
+}
+
+void AgentSettingsDialog::refreshSkillsTab() {
+    m_skillsListWidget->blockSignals(true);
+    m_skillsListWidget->clear();
+    auto skills = SkillManager::instance()->getAllSkills();
+    for (const auto &skill : skills) {
+        auto item = new QListWidgetItem(m_skillsListWidget);
+        item->setText(QString("✨ %1 (%2)").arg(skill.name, skill.id));
+        item->setData(Qt::UserRole, skill.id);
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        item->setCheckState(skill.enabled ? Qt::Checked : Qt::Unchecked);
+    }
+    m_skillsListWidget->blockSignals(false);
+    if (m_skillsListWidget->count() > 0) {
+        m_skillsListWidget->setCurrentRow(0);
+    } else {
+        m_skillDetailLabel->setText("暂无已加载的技能模块，可点击「打开技能目录」添加 SKILL.md。");
+    }
+}
+
+void AgentSettingsDialog::refreshMcpTab() {
+    m_mcpListWidget->clear();
+    auto clients = McpManager::instance()->getClients();
+    for (auto c : clients) {
+        auto item = new QListWidgetItem(m_mcpListWidget);
+        QString statusIcon = (c->state() == McpState::Connected) ? "🟢" : (c->state() == McpState::Connecting ? "🟡" : "🔴");
+        item->setText(QString("%1 %2 — %3").arg(statusIcon, c->serverName(), c->stateString()));
+        item->setData(Qt::UserRole, c->serverName());
+    }
+    if (m_mcpListWidget->count() > 0) {
+        m_mcpListWidget->setCurrentRow(0);
+    } else {
+        m_mcpDetailLabel->setText("未运行任何 MCP 服务。可点击「编辑 mcp_servers.json」配置并启用外部 MCP 服务器。");
+    }
 }
 
 void AgentSettingsDialog::autoDetectAipyKey() {

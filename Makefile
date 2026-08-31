@@ -237,7 +237,7 @@ api_doc_generated.hpp: $(API_DOC_FILES) Makefile
 
 
 libshijima/build/Makefile: libshijima/CMakeLists.txt FORCE
-	mkdir -p libshijima/build && cd libshijima/build && $(CMAKE) $(CMAKEFLAGS) -DCMAKE_C_FLAGS="-Wno-error" -DCMAKE_CXX_FLAGS="-DSHIJIMA_DUK_STATIC_BUILD -Wno-error" -DSHIJIMA_BUILD_EXAMPLES=NO ..
+	mkdir -p libshijima/build && cd libshijima/build && $(CMAKE) $(CMAKEFLAGS) -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_C_FLAGS="-Wno-error" -DCMAKE_CXX_FLAGS="-DSHIJIMA_DUK_STATIC_BUILD -Wno-error" -DSHIJIMA_BUILD_EXAMPLES=NO ..
 
 libshimejifinder/build/Makefile: libshimejifinder/CMakeLists.txt FORCE
 	chmod +x libshimejifinder/bin2cpp.sh 2>/dev/null || true
@@ -245,6 +245,7 @@ libshimejifinder/build/Makefile: libshimejifinder/CMakeLists.txt FORCE
 	mkdir -p libshimejifinder/build && cd libshimejifinder/build && \
 		PKG_CONFIG_PATH="/opt/homebrew/opt/libarchive/lib/pkgconfig:$$PKG_CONFIG_PATH" \
 		$(CMAKE) $(CMAKEFLAGS) \
+		-DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
 		-DCMAKE_C_FLAGS="-Wno-error" -DCMAKE_CXX_FLAGS="-Wno-error" \
 		-DSHIMEJIFINDER_BUILD_LIBARCHIVE=NO -DSHIMEJIFINDER_BUILD_EXAMPLES=NO ..
 

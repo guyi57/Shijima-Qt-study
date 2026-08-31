@@ -38,6 +38,7 @@
 #include "PlatformWidget.hpp"
 #include "ShijimaLicensesDialog.hpp"
 #include "ShijimaApiDialog.hpp"
+#include "SettingsDb.hpp"
 #include "ShijimaWidget.hpp"
 #include "HotkeyManager.hpp"
 #include "AgentService.hpp"
@@ -319,6 +320,23 @@ void ShijimaManager::buildToolbar() {
 
     menu = menuBar()->addMenu("编辑");
     {
+        action = menu->addAction("设为默认桌宠 ⭐");
+        connect(action, &QAction::triggered, [this]() {
+            auto items = m_listWidget.selectedItems();
+            if (!items.isEmpty()) {
+                QString rawName = items.first()->data(Qt::UserRole).toString();
+                if (rawName.isEmpty()) rawName = items.first()->text();
+                setDefaultMascot(rawName);
+            }
+        });
+
+        action = menu->addAction("生成选中桌宠");
+        connect(action, &QAction::triggered, [this]() {
+            for (auto item : m_listWidget.selectedItems()) {
+                itemDoubleClicked(item);
+            }
+        });
+
         action = menu->addAction("删除桌宠", QKeySequence::StandardKey::Delete);
         connect(action, &QAction::triggered, this, &ShijimaManager::deleteAction);
     }
@@ -486,14 +504,32 @@ void ShijimaManager::buildToolbar() {
     }
 }
 
+QString ShijimaManager::defaultMascotName() const {
+    return SettingsDb::instance()->get("mascot.default_name", "Default Mascot");
+}
+
+void ShijimaManager::setDefaultMascot(const QString &name) {
+    if (name.trimmed().isEmpty()) return;
+    SettingsDb::instance()->set("mascot.default_name", name.trimmed());
+    std::cout << "[桌宠管理器] 成功设置默认启动桌宠为: " << name.toStdString() << std::endl;
+    refreshListWidget();
+}
+
 void ShijimaManager::refreshListWidget() {
-    //FIXME: refresh only changed items
     m_listWidget.clear();
+    QString defName = defaultMascotName();
     auto names = m_loadedMascots.keys();
     names.sort(Qt::CaseInsensitive);
     for (auto &name : names) {
         auto item = new QListWidgetItem;
-        item->setText(name);
+        item->setData(Qt::UserRole, name);
+        if (name == defName) {
+            item->setText(name + " ⭐(默认)");
+            item->setToolTip("★ 当前默认启动桌宠: " + name);
+        } else {
+            item->setText(name);
+            item->setToolTip(name);
+        }
         item->setIcon(m_loadedMascots[name]->preview());
         m_listWidget.addItem(item);
     }
@@ -819,13 +855,37 @@ ShijimaManager::ShijimaManager(QWidget *parent):
     }
     setWindowFlags((windowFlags() | Qt::CustomizeWindowHint | Qt::MaximizeUsingFullscreenGeometryHint |
         Qt::WindowMinimizeButtonHint) & ~Qt::WindowMaximizeButtonHint);
-    setManagerVisible(true);
+    setManagerVisible(false);
 
     connect(&m_listWidget, &QListWidget::itemDoubleClicked,
         this, &ShijimaManager::itemDoubleClicked);
     m_listWidget.setIconSize({ 64, 64 });
     m_listWidget.installEventFilter(this);
     m_listWidget.setSelectionMode(QListWidget::ExtendedSelection);
+    m_listWidget.setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(&m_listWidget, &QListWidget::customContextMenuRequested, this, [this](const QPoint &pos) {
+        auto item = m_listWidget.itemAt(pos);
+        if (!item) return;
+        QString rawName = item->data(Qt::UserRole).toString();
+        if (rawName.isEmpty()) rawName = item->text();
+
+        QMenu menu(this);
+        auto spawnAct = menu.addAction("➕ 生成该桌宠");
+        auto defAct = menu.addAction("⭐ 设为默认启动桌宠");
+        menu.addSeparator();
+        auto delAct = menu.addAction("🗑️ 删除桌宠");
+
+        connect(spawnAct, &QAction::triggered, [this, rawName]() {
+            spawn(rawName.toStdString());
+        });
+        connect(defAct, &QAction::triggered, [this, rawName]() {
+            setDefaultMascot(rawName);
+        });
+        connect(delAct, &QAction::triggered, this, &ShijimaManager::deleteAction);
+
+        menu.exec(m_listWidget.mapToGlobal(pos));
+    });
+
     setCentralWidget(&m_listWidget);
     buildToolbar();
 
@@ -834,7 +894,10 @@ ShijimaManager::ShijimaManager(QWidget *parent):
 }
 
 void ShijimaManager::itemDoubleClicked(QListWidgetItem *qItem) {
-    spawn(qItem->text().toStdString());
+    if (!qItem) return;
+    QString rawName = qItem->data(Qt::UserRole).toString();
+    if (rawName.isEmpty()) rawName = qItem->text();
+    spawn(rawName.toStdString());
 }
 
 void ShijimaManager::closeEvent(QCloseEvent *event) {
@@ -1013,9 +1076,6 @@ void ShijimaManager::setManagerVisible(bool visible) {
         show();
         m_wasVisible = true;
     }
-    else if (m_mascots.size() == 0) {
-        askClose();
-    }
     else {
         hide();
         m_wasVisible = false;
@@ -1081,7 +1141,7 @@ void ShijimaManager::tick() {
     for (auto iter = m_mascots.end(); iter != m_mascots.begin(); ) {
         --iter;
         ShijimaWidget *shimeji = *iter;
-        if (!shimeji->isVisible()) {
+        if (shimeji->isMarkedForDeletion()) {
             int mascotId = shimeji->mascotId();
             delete shimeji;
             auto erasePos = iter;

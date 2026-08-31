@@ -125,7 +125,7 @@ void TimerManager::calculateNextTrigger(ScheduledTimer &timer) {
 #include "SettingsDb.hpp"
 
 void TimerManager::loadTimers() {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     m_timers.clear();
 
     qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
@@ -165,7 +165,7 @@ void TimerManager::loadTimers() {
 }
 
 void TimerManager::saveTimers() {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     QJsonArray arr;
     for (const auto &t : m_timers) {
         arr.append(t.toJson());
@@ -185,7 +185,7 @@ QString TimerManager::addTimer(ScheduledTimer timer) {
     }
 
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         m_timers.append(timer);
     }
 
@@ -203,7 +203,7 @@ QString TimerManager::addTimer(ScheduledTimer timer) {
 bool TimerManager::updateTimer(const ScheduledTimer &timer) {
     bool found = false;
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         for (int i = 0; i < m_timers.size(); ++i) {
             if (m_timers[i].id == timer.id) {
                 m_timers[i] = timer;
@@ -222,7 +222,7 @@ bool TimerManager::updateTimer(const ScheduledTimer &timer) {
 bool TimerManager::deleteTimer(const QString &timerId) {
     bool removed = false;
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         for (int i = 0; i < m_timers.size(); ++i) {
             if (m_timers[i].id == timerId) {
                 m_timers.removeAt(i);
@@ -241,7 +241,7 @@ bool TimerManager::deleteTimer(const QString &timerId) {
 bool TimerManager::setTimerEnabled(const QString &timerId, bool enabled) {
     bool found = false;
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         for (int i = 0; i < m_timers.size(); ++i) {
             if (m_timers[i].id == timerId) {
                 m_timers[i].enabled = enabled;
@@ -261,12 +261,12 @@ bool TimerManager::setTimerEnabled(const QString &timerId, bool enabled) {
 }
 
 QList<ScheduledTimer> TimerManager::getAllTimers() {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     return m_timers;
 }
 
 ScheduledTimer TimerManager::getTimer(const QString &timerId, bool *found) {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     for (const auto &t : m_timers) {
         if (t.id == timerId) {
             if (found) *found = true;
@@ -321,7 +321,7 @@ void TimerManager::checkTimers() {
     QList<ScheduledTimer> triggeredList;
 
     {
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
         for (int i = 0; i < m_timers.size(); ++i) {
             auto &t = m_timers[i];
             if (t.enabled && t.targetTimestamp > 0 && nowMs >= t.targetTimestamp) {

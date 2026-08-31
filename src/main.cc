@@ -27,6 +27,7 @@
 #include "BehaviorEngine.hpp"
 #include "SystemObserver.hpp"
 #include "MusicFavoriteDb.hpp"
+#include "SettingsDb.hpp"
 #include "cli.hpp"
 #include <httplib.h>
 
@@ -47,18 +48,21 @@ int main(int argc, char **argv) {
         pingClient.set_connection_timeout(0, 500000);
         pingClient.set_read_timeout(0, 500000);
         auto pingResult = pingClient.Get("/guyi/api/v1/ping");
-        if (pingResult != nullptr) {
+        if (pingResult != nullptr && pingResult->status == 200) {
             throw std::runtime_error("Shijima-Qt is already running!");
         }
         auto manager = ShijimaManager::defaultManager();
         if (manager->mascots().empty() && !manager->loadedMascots().isEmpty()) {
-            if (manager->loadedMascots().contains("Default Mascot")) {
+            QString defaultMascot = SettingsDb::instance()->get("mascot.default_name", "Default Mascot");
+            if (manager->loadedMascots().contains(defaultMascot)) {
+                manager->spawn(defaultMascot.toStdString());
+            } else if (manager->loadedMascots().contains("Default Mascot")) {
                 manager->spawn("Default Mascot");
             } else {
                 manager->spawn(manager->loadedMascots().firstKey().toStdString());
             }
         }
-        manager->setManagerVisible(true);
+        manager->setManagerVisible(false);
         MusicFavoriteDb::instance()->initDb();
         BehaviorEngine::instance()->start();
         SystemObserver::instance()->start();

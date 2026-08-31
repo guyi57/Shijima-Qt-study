@@ -64,6 +64,8 @@ public:
     void onTickSync(std::function<void(ShijimaManager *)> callback);
     void setThrowImpulse(double dx, double dy);
     void updateGlobalHotkeys();
+    QString defaultMascotName() const;
+    void setDefaultMascot(const QString &name);
     ~ShijimaManager();
 protected:
     void timerEvent(QTimerEvent *event) override;

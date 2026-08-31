@@ -176,6 +176,9 @@ void setupFloatingBubbleWindow(QWidget *widget) {
     showOnAllDesktops(widget);
 }
 
+void activateApp() {
+}
+
 bool isAppFrontmost(const QString &appTarget) {
     Q_UNUSED(appTarget);
     return false;

@@ -3,6 +3,7 @@
 // 
 
 #include "HotkeyManager.hpp"
+#include "Platform/Platform.hpp"
 #include <QGuiApplication>
 #include <QClipboard>
 #include <QDebug>
@@ -101,6 +102,7 @@ static OSStatus hotKeyHandler(EventHandlerCallRef, EventRef theEvent, void*) {
 
     if (hkId.id == 101) {
         std::cout << "[全局快捷键] 触发 ⌥+T (划词翻译快捷键)" << std::endl;
+        Platform::activateApp();
         if (s_translateCallback) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 s_translateCallback();
@@ -108,6 +110,7 @@ static OSStatus hotKeyHandler(EventHandlerCallRef, EventRef theEvent, void*) {
         }
     } else if (hkId.id == 102) {
         std::cout << "[全局快捷键] 触发 ⌥+Q (划词提问快捷键)" << std::endl;
+        Platform::activateApp();
         if (s_askCallback) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 s_askCallback();
@@ -115,6 +118,7 @@ static OSStatus hotKeyHandler(EventHandlerCallRef, EventRef theEvent, void*) {
         }
     } else if (hkId.id == 201) {
         std::cout << "[全局快捷键] 触发 音乐播放器窗口显示/隐藏" << std::endl;
+        Platform::activateApp();
         if (s_musicToggleCallback) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 s_musicToggleCallback();

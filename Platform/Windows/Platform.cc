@@ -87,6 +87,9 @@ bool openTargetApp(const QString &appTarget) {
     return ((INT_PTR)hInst > 32);
 }
 
+void activateApp() {
+}
+
 bool useWindowMasks() {
     return false;
 }

@@ -228,9 +228,9 @@ AgentSettingsDialog::AgentSettingsDialog(QWidget *parent)
 
     auto apiDocLabel = new QLabel(
         "💡 <b>Webhook API 接入指南</b>：<br>"
-        "通过向 <code>http://127.0.0.1:41970/api/agent/status</code> 发送 POST 请求即可驱动桌宠联动：<br>"
+        "通过向 <code>http://127.0.0.1:32456/api/agent/status</code> 发送 POST 请求即可驱动桌宠联动：<br>"
         "<pre style='background: #f4f4f5; padding: 6px; border-radius: 4px; font-size: 11px; margin-top: 4px;'>"
-        "curl -X POST http://127.0.0.1:41970/api/agent/status \\\n"
+        "curl -X POST http://127.0.0.1:32456/api/agent/status \\\n"
         "  -H 'Content-Type: application/json' \\\n"
         "  -d '{\"agent_name\": \"Claude Code\", \"status\": \"working\", \"task\": \"重构数据库模块\"}'"
         "</pre>"

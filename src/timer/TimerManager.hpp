@@ -148,7 +148,7 @@ private:
     void calculateNextTrigger(ScheduledTimer &timer);
     void checkTimers();
 
-    mutable std::mutex m_mutex;
+    mutable std::recursive_mutex m_mutex;
     QList<ScheduledTimer> m_timers;
     QTimer *m_tickTimer = nullptr;
     QString m_storagePath;

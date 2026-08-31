@@ -3,6 +3,7 @@
 // 
 
 #include "AskDialog.hpp"
+#include "Platform/Platform.hpp"
 #include <QHBoxLayout>
 #include <QScreen>
 #include <QGuiApplication>
@@ -150,5 +151,6 @@ void AskDialog::promptForContext(QString const& contextText) {
     show();
     raise();
     activateWindow();
+    Platform::activateApp();
     m_inputEdit->setFocus();
 }

@@ -59,6 +59,7 @@ public:
     void showInspector();
     void showAgentSettings();
     void markForDeletion() { m_markedForDeletion = true; }
+    bool isMarkedForDeletion() const { return m_markedForDeletion; }
     bool inspectorVisible();
     bool paused() const { return m_paused || m_contextMenuVisible; }
     shijima::mascot::manager &mascot() {

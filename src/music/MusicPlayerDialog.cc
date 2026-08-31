@@ -1,4 +1,5 @@
 #include "MusicPlayerDialog.hpp"
+#include "Platform/Platform.hpp"
 #include <QPainter>
 #include <QPainterPath>
 #include <QPixmap>
@@ -9,6 +10,8 @@
 #include <QMenu>
 #include <QNetworkRequest>
 #include <QNetworkReply>
+#include <QGuiApplication>
+#include <QScreen>
 #include <iostream>
 
 MusicPlayerDialog* MusicPlayerDialog::instance()
@@ -33,17 +36,29 @@ void MusicPlayerDialog::toggleVisibility()
     if (isVisible()) {
         hide();
     } else {
+        if (auto screen = QGuiApplication::primaryScreen()) {
+            auto geo = screen->geometry();
+            move(geo.center().x() - width() / 2, geo.center().y() - height() / 2);
+        }
         show();
         raise();
         activateWindow();
+        Platform::activateApp();
     }
 }
 
 void MusicPlayerDialog::searchAndPlay(const QString &keyword, const QString &source)
 {
-    if (!isVisible()) show();
+    if (!isVisible()) {
+        if (auto screen = QGuiApplication::primaryScreen()) {
+            auto geo = screen->geometry();
+            move(geo.center().x() - width() / 2, geo.center().y() - height() / 2);
+        }
+        show();
+    }
     raise();
     activateWindow();
+    Platform::activateApp();
 
     m_searchInput->setText(keyword);
     int idx = m_sourceCombo->findData(source);

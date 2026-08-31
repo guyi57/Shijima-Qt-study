@@ -83,6 +83,12 @@ void setupFloatingBubbleWindow(QWidget *widget) {
     }
 }
 
+void activateApp() {
+    @autoreleasepool {
+        [NSApp activateIgnoringOtherApps:YES];
+    }
+}
+
 bool isAppFrontmost(const QString &appTarget) {
     if (appTarget.trimmed().isEmpty()) return false;
 

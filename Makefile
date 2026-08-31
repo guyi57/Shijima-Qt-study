@@ -176,9 +176,12 @@ publish/Linux/$(CONFIG): shijima-qt$(EXE)
 publish/macOS/$(CONFIG)/Shijima-Qt.app: publish/macOS/$(CONFIG)
 	rm -rf $@ && [ ! -d $@ ]
 	cp -r Shijima-Qt.app $@
-	mkdir -p $@/Contents/MacOS
+	mkdir -p $@/Contents/MacOS $@/Contents/Frameworks
 	cp $^/shijima-qt $@/Contents/MacOS/
+	cp libshimejifinder/build/unarr/libunarr.1.dylib $@/Contents/MacOS/ 2>/dev/null || true
+	cp libshimejifinder/build/unarr/libunarr.1.dylib $@/Contents/Frameworks/ 2>/dev/null || true
 	macdeployqt $@ || true
+	codesign --force --deep --sign - $@ 2>/dev/null || true
 
 
 

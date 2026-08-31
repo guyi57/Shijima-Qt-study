@@ -52,9 +52,13 @@ int main(int argc, char **argv) {
         }
         auto manager = ShijimaManager::defaultManager();
         if (manager->mascots().empty() && !manager->loadedMascots().isEmpty()) {
-            manager->spawn(manager->loadedMascots().firstKey().toStdString());
+            if (manager->loadedMascots().contains("Default Mascot")) {
+                manager->spawn("Default Mascot");
+            } else {
+                manager->spawn(manager->loadedMascots().firstKey().toStdString());
+            }
         }
-        manager->setManagerVisible(false);
+        manager->setManagerVisible(true);
         MusicFavoriteDb::instance()->initDb();
         BehaviorEngine::instance()->start();
         SystemObserver::instance()->start();

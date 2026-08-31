@@ -22,6 +22,8 @@
 #include "ShijimaWidget.hpp"
 #include "PetEventBus.hpp"
 #include "PetAction.hpp"
+#include "AgentService.hpp"
+#include "PersonaManager.hpp"
 #include <thread>
 #include <iostream>
 #include <QJsonArray>
@@ -499,6 +501,91 @@ ShijimaHttpApi::ShijimaHttpApi(ShijimaManager *manager): m_server(new Server),
         });
 
         responseObj["success"] = true;
+        sendJson(res, responseObj);
+    });
+
+    // 接收 Coding Agent 状态感知（生命周期、动作与播报）
+    m_server->Post("/api/agent/status", [](const Request &req, Response &res) {
+        QJsonObject responseObj;
+        auto doc = QJsonDocument::fromJson(QByteArray(req.body.c_str(), req.body.size()));
+        if (!doc.isObject()) {
+            res.status = 400;
+            responseObj["success"] = false;
+            responseObj["error"] = "Invalid JSON body";
+            sendJson(res, responseObj);
+            return;
+        }
+
+        auto root = doc.object();
+        AgentStatusEvent event;
+        event.agentName = root["agent_name"].toString("Coding Agent");
+        event.status = root["status"].toString("working").toLower().trimmed();
+        event.task = root["task"].toString().trimmed();
+        event.details = root["details"].toString().trimmed();
+        event.customAction = root["action"].toString().trimmed();
+        event.timestamp = QDateTime::currentMSecsSinceEpoch();
+
+        AgentService::instance()->handleAgentStatus(event);
+
+        responseObj["success"] = true;
+        responseObj["message"] = "Agent status received and processed";
+        sendJson(res, responseObj);
+    });
+
+    // 查询当前感知的 Coding Agent 状态
+    m_server->Get("/api/agent/status", [](const Request &, Response &res) {
+        QJsonObject responseObj;
+        auto last = AgentService::instance()->lastAgentStatus();
+        responseObj["success"] = true;
+        responseObj["agent_name"] = last.agentName;
+        responseObj["status"] = last.status;
+        responseObj["task"] = last.task;
+        responseObj["details"] = last.details;
+        responseObj["timestamp"] = last.timestamp;
+        sendJson(res, responseObj);
+    });
+
+    // 查询所有可用人格列表与当前激活的人格
+    m_server->Get("/api/persona/list", [](const Request &, Response &res) {
+        QJsonObject responseObj;
+        QJsonArray arr;
+        for (const auto &p : PersonaManager::instance()->allPersonas()) {
+            QJsonObject obj;
+            obj["id"] = p.id;
+            obj["name"] = p.name;
+            obj["description"] = p.description;
+            obj["tone_suffix"] = p.toneSuffix;
+            arr.append(obj);
+        }
+        responseObj["success"] = true;
+        responseObj["active_persona_id"] = PersonaManager::instance()->activePersonaId();
+        responseObj["personas"] = arr;
+        sendJson(res, responseObj);
+    });
+
+    // 动态切换人格与自定义提示词
+    m_server->Post("/api/persona/set", [](const Request &req, Response &res) {
+        QJsonObject responseObj;
+        auto doc = QJsonDocument::fromJson(QByteArray(req.body.c_str(), req.body.size()));
+        if (!doc.isObject()) {
+            res.status = 400;
+            responseObj["success"] = false;
+            responseObj["error"] = "Invalid JSON body";
+            sendJson(res, responseObj);
+            return;
+        }
+
+        auto root = doc.object();
+        QString personaId = root["persona_id"].toString().trimmed();
+        if (!personaId.isEmpty()) {
+            PersonaManager::instance()->setActivePersonaId(personaId);
+        }
+        if (root.contains("custom_prompt")) {
+            PersonaManager::instance()->setCustomPersonaPrompt(root["custom_prompt"].toString().trimmed());
+        }
+
+        responseObj["success"] = true;
+        responseObj["active_persona_id"] = PersonaManager::instance()->activePersonaId();
         sendJson(res, responseObj);
     });
 

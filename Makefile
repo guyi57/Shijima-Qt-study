@@ -38,6 +38,7 @@ SOURCES = src/main.cc \
 	src/pet/InitiativeTrigger.cc \
 	src/agent/AgentService.cc \
 	src/agent/AipyAdapter.cc \
+	src/agent/PersonaManager.cc \
 	src/agent/ShijimaHttpApi.cc \
 	src/music/MusicFavoriteDb.cc \
 	src/music/MusicApiService.cc \

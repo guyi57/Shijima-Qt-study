@@ -5,8 +5,11 @@
 // 
 
 #include <QDialog>
+#include <QTabWidget>
 #include <QLineEdit>
+#include <QTextEdit>
 #include <QSpinBox>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QPushButton>
 #include <QLabel>
@@ -21,6 +24,7 @@ public:
 
 private:
     void applyPreset(int index);
+    void onPersonaChanged(int index);
     void saveAndClose();
     void testConnection();
     void testAipyConnection();
@@ -42,6 +46,16 @@ private:
 
     QPushButton *m_testBtn;
     QLabel *m_testStatusLabel;
+
+    // 🎭 人格适配器 (Persona)
+    QComboBox *m_personaCombo;
+    QLabel *m_personaDescLabel;
+    QTextEdit *m_customPromptEdit;
+
+    // 🤖 Coding Agent 状态感知与 Token 省流开关
+    QCheckBox *m_enableStateHookCheck;
+    QCheckBox *m_enableLlmNarrationCheck;
+    QSpinBox *m_stateDebounceSpin;
 
     // 智能体 Agent 适配器配置
     QComboBox *m_agentTypeCombo;

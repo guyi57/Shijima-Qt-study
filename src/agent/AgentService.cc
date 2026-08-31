@@ -12,6 +12,10 @@
 #include "MusicApiService.hpp"
 #include "MusicFavoriteDb.hpp"
 #include "SettingsDb.hpp"
+#include "PersonaManager.hpp"
+#include "PetAction.hpp"
+#include "MessageHistoryManager.hpp"
+#include "ShijimaWidget.hpp"
 #include <QDateTime>
 #include <QNetworkAccessManager>
 #include <QNetworkRequest>
@@ -498,6 +502,10 @@ void AgentService::loadConfig(QString const& path) {
         m_config.aipyBase = db->get("agent.aipy_base", "http://127.0.0.1:41970");
         m_config.aipyKey = db->get("agent.aipy_key", "");
         m_config.routingMode = db->get("agent.routing_mode", "AUTO");
+
+        m_config.enableAgentStateHook = db->getBool("agent.enable_state_hook", true);
+        m_config.enableLlmTaskNarration = db->getBool("agent.enable_llm_narration", false);
+        m_config.stateDebounceSec = db->getInt("agent.state_debounce_sec", 2);
     }
     syncAdapterConfigs();
 }
@@ -521,6 +529,10 @@ void AgentService::saveConfig(QString const& /* path */) {
     db->set("agent.aipy_base", m_config.aipyBase);
     db->set("agent.aipy_key", m_config.aipyKey);
     db->set("agent.routing_mode", m_config.routingMode);
+
+    db->setBool("agent.enable_state_hook", m_config.enableAgentStateHook);
+    db->setBool("agent.enable_llm_narration", m_config.enableLlmTaskNarration);
+    db->setInt("agent.state_debounce_sec", m_config.stateDebounceSec);
 }
 
 void AgentService::setConfig(AgentConfig const& cfg) {
@@ -705,14 +717,16 @@ void AgentService::ask(QString const& contextText,
         return;
     }
 
-    // 默认直连大模型问答（注入当前本地系统时间与定时器 Tool 指南）
+    // 默认直连大模型问答（注入当前本地系统时间、人格设定与定时器 Tool 指南）
     QString currentLocalTime = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss dddd");
+    QString personaPrompt = PersonaManager::instance()->buildEffectiveSystemPrompt();
+
     QJsonArray messages;
     QJsonObject sysMsg;
     sysMsg["role"] = "system";
     sysMsg["content"] = QString(
-        "你是一个聪明、活泼、可爱的智能桌面宠物助手。\n"
-        "【当前本地真实系统时间】: %1。\n"
+        "%1\n\n"
+        "【当前本地真实系统时间】: %2。\n"
         "你拥有管理本地系统定时器与定时任务的工具（timer_manage）。\n"
         "【定时器功能支持灵活组合】\n"
         "1. 单次倒计时/定时刻: repeat='once', trigger_in_seconds 或 target_time='2026-08-24 15:00'\n"
@@ -734,8 +748,8 @@ void AgentService::ask(QString const& contextText,
         "  \"days_of_week\": [1, 2, 3, 4, 5]\n"
         "}\n"
         "```\n"
-        "请结合上下文和用户的参考文本，给出准确、简洁、友善的回答，适合在桌面气泡中阅读。"
-    ).arg(currentLocalTime);
+        "请结合上下文和用户的参考文本，给出符合你人格设定的准确、简洁、友善的回答，适合在桌面气泡中阅读。"
+    ).arg(personaPrompt, currentLocalTime);
     messages.append(sysMsg);
 
     for (auto val : m_history) {
@@ -759,11 +773,35 @@ void AgentService::ask(QString const& contextText,
     }
 
     sendChatCompletion(messages, [this, question, finishCallback](bool success, QString const& result) {
+        QString outAction;
+        QString cleanResult;
+        PersonaManager::parseActionAndContent(result, outAction, cleanResult);
+
+        // 如果模型输出带有动作指令标签，调度桌宠做动作
+        if (!outAction.isEmpty()) {
+            PetActionCommand cmd;
+            cmd.speechText = "";
+            if (outAction == "jump") cmd.type = PetActionType::Jump;
+            else if (outAction == "sit") cmd.type = PetActionType::Sit;
+            else if (outAction == "crawl") cmd.type = PetActionType::LieDown;
+            else if (outAction == "celebrate" || outAction == "happy") cmd.type = PetActionType::Happy;
+            else if (outAction == "resist" || outAction == "angry") cmd.type = PetActionType::Angry;
+            else if (outAction == "walk") cmd.type = PetActionType::Walk;
+            else {
+                cmd.type = PetActionType::CustomBehavior;
+                cmd.customBehaviorName = outAction;
+            }
+            auto const& mascots = ShijimaManager::defaultManager()->mascots();
+            if (!mascots.empty()) {
+                mascots.front()->doAction(cmd);
+            }
+        }
+
         if (success) {
             appendMemory("user", question);
-            appendMemory("assistant", result);
+            appendMemory("assistant", cleanResult);
         }
-        finishCallback(success, result, "");
+        finishCallback(success, cleanResult, "");
     });
 }
 
@@ -1074,3 +1112,123 @@ void AgentService::requestPetIntent(const QJsonObject &contextInfo, std::functio
         callback(true, intent);
     });
 }
+
+void AgentService::handleAgentStatus(AgentStatusEvent const& event, std::function<void(bool success, QString const& message)> callback) {
+    if (!m_config.enableAgentStateHook) {
+        if (callback) callback(false, "Coding Agent 状态感知功能当前在设置中已关闭");
+        return;
+    }
+
+    qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+    
+    // 防抖限频（finished 和 need_approval 属于关键状态，不进行防抖忽略）
+    if (event.status != "finished" && event.status != "need_approval") {
+        if (m_lastStatus.status == event.status && 
+            m_lastStatus.task == event.task && 
+            (nowMs - m_lastStatus.timestamp) < (m_config.stateDebounceSec * 1000)) {
+            if (callback) callback(true, "状态未变动（防抖已生效）");
+            return;
+        }
+    }
+
+    m_lastStatus = event;
+    m_lastStatus.timestamp = nowMs;
+
+    // 1. 动作调度准备
+    PetActionCommand cmd;
+    if (!event.customAction.isEmpty()) {
+        QString act = event.customAction.toLower().trimmed();
+        if (act == "jump") cmd.type = PetActionType::Jump;
+        else if (act == "sit") cmd.type = PetActionType::Sit;
+        else if (act == "crawl" || act == "work") cmd.type = PetActionType::LieDown;
+        else if (act == "celebrate" || act == "happy") cmd.type = PetActionType::Happy;
+        else if (act == "resist" || act == "angry") cmd.type = PetActionType::Angry;
+        else if (act == "walk") cmd.type = PetActionType::Walk;
+        else {
+            cmd.type = PetActionType::CustomBehavior;
+            cmd.customBehaviorName = act;
+        }
+    } else {
+        if (event.status == "thinking") {
+            cmd.type = PetActionType::Sit;
+        } else if (event.status == "working" || event.status == "coding") {
+            cmd.type = PetActionType::Walk;
+        } else if (event.status == "need_approval") {
+            cmd.type = PetActionType::Jump;
+        } else if (event.status == "finished") {
+            cmd.type = PetActionType::Happy;
+        } else if (event.status == "error") {
+            cmd.type = PetActionType::Angry;
+        } else {
+            cmd.type = PetActionType::Idle;
+        }
+    }
+
+    auto showBubbleAndHistory = [event](QString const& speechText, int duration) {
+        auto const& mascots = ShijimaManager::defaultManager()->mascots();
+        if (!mascots.empty()) {
+            mascots.front()->showMessage(speechText, duration, event.agentName);
+        }
+        MessageHistoryManager::instance()->addRecord(
+            "agent_task", 
+            QString("【%1】%2").arg(event.agentName, event.status), 
+            speechText, 
+            event.agentName
+        );
+    };
+
+    // 2. 播报文本生成（Token 省流判断）
+    int duration = (event.status == "need_approval") ? 10000 : 5000;
+
+    // 如果开启了 AI 口语化润色且为任务完成/出错阶段，且配置了 API Key，调用大模型润色
+    if (m_config.enableLlmTaskNarration && 
+        (event.status == "finished" || event.status == "error") && 
+        !m_config.apiKey.isEmpty() && !m_config.apiKey.contains("YOUR_API_KEY")) 
+    {
+        QJsonArray messages;
+        QJsonObject sysMsg;
+        sysMsg["role"] = "system";
+        sysMsg["content"] = PersonaManager::instance()->buildEffectiveSystemPrompt();
+        messages.append(sysMsg);
+
+        QJsonObject userMsg;
+        userMsg["role"] = "user";
+        userMsg["content"] = QString(
+            "编程助手【%1】刚刚%2了任务。\n"
+            "任务内容：%3\n"
+            "执行细节：%4\n"
+            "请用你的人格风格，用 1~2 句话（35字以内）向主人进行口语化桌面播报，突出重点并表达你的情感："
+        ).arg(event.agentName, (event.status == "finished" ? "完成" : "报错中断"), event.task, event.details);
+        messages.append(userMsg);
+
+        sendChatCompletion(messages, [event, cmd, duration, showBubbleAndHistory, callback](bool ok, QString const& llmReply) {
+            QString outAction;
+            QString cleanText;
+            PersonaManager::parseActionAndContent(llmReply, outAction, cleanText);
+            
+            QString finalSpeech = ok ? cleanText : PersonaManager::instance()->renderStatusNarration(event.agentName, event.status, event.task, event.details);
+            
+            auto const& mascots = ShijimaManager::defaultManager()->mascots();
+            if (!mascots.empty()) {
+                mascots.front()->doAction(cmd);
+            }
+            showBubbleAndHistory(finalSpeech, duration);
+            if (callback) callback(true, "已执行状态感知与 AI 播报");
+        });
+        return;
+    }
+
+    // 0 Token 极速本地模式
+    QString localSpeech = PersonaManager::instance()->renderStatusNarration(
+        event.agentName, event.status, event.task, event.details
+    );
+
+    auto const& mascots = ShijimaManager::defaultManager()->mascots();
+    if (!mascots.empty()) {
+        mascots.front()->doAction(cmd);
+    }
+    showBubbleAndHistory(localSpeech, duration);
+
+    if (callback) callback(true, "已执行本地 0-Token 状态感知与动作联动");
+}
+

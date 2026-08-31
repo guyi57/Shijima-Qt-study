@@ -44,13 +44,13 @@ jobs:
       - name: Package Windows Zip
         run: |
           cd publish/Windows/release
-          zip -r ../../../Shijima-Qt-Windows-x64.zip .
+          zip -r ../../../guyi-bot-Windows-x64.zip .
           cd ../../..
       - name: Archive Windows x86_64 release build
         uses: actions/upload-artifact@v4
         with:
           name: release-windows-x86_64
-          path: Shijima-Qt-Windows-x64.zip
+          path: guyi-bot-Windows-x64.zip
           retention-days: 1
 
   build-macos:
@@ -78,13 +78,17 @@ jobs:
       - name: Package macOS Zip
         run: |
           cd publish/macOS/release
-          zip -r -y ../../../Shijima-Qt-macOS-AppleSilicon.zip Shijima-Qt.app
+          if [ -d guyi-bot.app ]; then
+            zip -r -y ../../../guyi-bot-macOS-AppleSilicon.zip guyi-bot.app
+          elif [ -d Shijima-Qt.app ]; then
+            zip -r -y ../../../guyi-bot-macOS-AppleSilicon.zip Shijima-Qt.app
+          fi
           cd ../../..
       - name: Archive macOS arm64 release build
         uses: actions/upload-artifact@v4
         with:
           name: release-macos-arm64
-          path: Shijima-Qt-macOS-AppleSilicon.zip
+          path: guyi-bot-macOS-AppleSilicon.zip
           retention-days: 1
 
   publish-release:
@@ -106,7 +110,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag_name || 'v1.0.0' }}
-          name: "Shijima-Qt Release ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag_name || 'v1.0.0' }}"
+          name: "guyi-bot Release ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag_name || 'v1.0.0' }}"
           draft: false
           prerelease: false
           generate_release_notes: true

@@ -20,6 +20,8 @@
 #include "KWin.hpp"
 #include <QTextStream>
 #include <QTemporaryDir>
+#include <string>
+#include <stdexcept>
 
 #include "kwin_script.c"
 

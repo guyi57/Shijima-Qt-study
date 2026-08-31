@@ -20,6 +20,7 @@
 #include <QDBusMessage>
 #include "DBus.hpp"
 #include "Platform-Linux.hpp"
+#include <string>
 
 using namespace Platform::DBus;
 

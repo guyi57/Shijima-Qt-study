@@ -20,6 +20,8 @@
 #include "GNOME.hpp"
 #include <QFile>
 #include <QDataStream>
+#include <string>
+#include <stdexcept>
 
 #include "gnome_script.c"
 

@@ -29,6 +29,8 @@
 #include <QGuiApplication>
 #include <QFile>
 #include <iostream>
+#include <memory>
+#include <stdexcept>
 #include <unistd.h>
 
 namespace Platform {

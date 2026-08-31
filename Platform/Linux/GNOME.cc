@@ -25,6 +25,8 @@
 #include <QStringList>
 #include "ExtensionFile.hpp"
 #include <QDir>
+#include <string>
+#include <stdexcept>
 
 using namespace Platform::DBus;
 

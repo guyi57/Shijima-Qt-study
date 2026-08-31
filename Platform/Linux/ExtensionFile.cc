@@ -18,6 +18,11 @@
 
 #include "ExtensionFile.hpp"
 #include <QProcessEnvironment>
+#include <QFile>
+#include <QDir>
+#include <QTextStream>
+#include <QDataStream>
+#include <stdexcept>
 #include <unistd.h>
 
 namespace Platform {

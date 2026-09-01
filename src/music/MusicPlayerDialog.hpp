@@ -81,6 +81,12 @@ private:
     QSlider *m_volumeSlider = nullptr;
     QLabel *m_volumeIcon = nullptr;
 
+    // 推荐模式与说明
+    QComboBox *m_recommendModeCombo = nullptr;
+    QPushButton *m_recommendHelpBtn = nullptr;
+    void refreshRecommendModeUI();
+    void showRecommendHelpDialog();
+
     bool m_isSliderDragging = false;
     QPoint m_dragPosition;
 

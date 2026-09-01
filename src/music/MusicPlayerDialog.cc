@@ -73,6 +73,7 @@ void MusicPlayerDialog::showEvent(QShowEvent *event)
     QDialog::showEvent(event);
     refreshFavoritesList();
     refreshPlaylist();
+    refreshRecommendModeUI();
     updateFavoriteState(MusicPlayerManager::instance()->isCurrentSongFavorite());
 }
 
@@ -471,6 +472,7 @@ void MusicPlayerDialog::setupUi()
 
     auto playActionBar = new QHBoxLayout();
     playActionBar->setContentsMargins(10, 4, 10, 2);
+    playActionBar->setSpacing(8);
 
     auto autoRemoveCheck = new QCheckBox("🗑️ 播完自动移出", playTabWidget);
     autoRemoveCheck->setToolTip("歌曲播放完毕后，自动从播放列表中移出（消费型播放列表）");
@@ -483,6 +485,49 @@ void MusicPlayerDialog::setupUi()
     connect(autoRemoveCheck, &QCheckBox::toggled, this, [](bool checked) {
         MusicPlayerManager::instance()->setAutoRemovePlayed(checked);
     });
+
+    auto modeLabel = new QLabel("🎯 模式:", playTabWidget);
+    modeLabel->setStyleSheet("QLabel { font-size: 11.5px; color: #475569; font-weight: 600; }");
+
+    m_recommendModeCombo = new QComboBox(playTabWidget);
+    m_recommendModeCombo->addItem("💖 熟悉模式", "familiar");
+    m_recommendModeCombo->addItem("🚀 探索模式", "explore");
+    m_recommendModeCombo->addItem("🎲 随机模式", "random");
+    m_recommendModeCombo->setToolTip("熟悉模式: 优先收藏与喜好衍生\n探索模式: 全网爆款新歌\n随机模式: 喜好标签随机组合");
+    m_recommendModeCombo->setStyleSheet(
+        "QComboBox {"
+        "  background: #f8fafc;"
+        "  border: 1px solid #cbd5e1;"
+        "  border-radius: 6px;"
+        "  padding: 3px 6px;"
+        "  font-size: 11.5px;"
+        "  font-weight: 600;"
+        "  color: #334155;"
+        "}"
+        "QComboBox::drop-down { border: none; width: 14px; }"
+    );
+    connect(m_recommendModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int idx) {
+        if (idx < 0) return;
+        QString mode = m_recommendModeCombo->itemData(idx).toString();
+        MusicFavoriteDb::instance()->setRecommendationMode(mode);
+    });
+
+    m_recommendHelpBtn = new QPushButton("❓", playTabWidget);
+    m_recommendHelpBtn->setFixedSize(22, 22);
+    m_recommendHelpBtn->setToolTip("点击查看推荐模式与桌宠问答框使用说明");
+    m_recommendHelpBtn->setStyleSheet(
+        "QPushButton {"
+        "  background: #eff6ff;"
+        "  color: #3b82f6;"
+        "  font-size: 11.5px;"
+        "  font-weight: bold;"
+        "  border: 1px solid #bfdbfe;"
+        "  border-radius: 11px;"
+        "}"
+        "QPushButton:hover { background: #dbeafe; color: #1d4ed8; }"
+    );
+    m_recommendHelpBtn->setCursor(Qt::PointingHandCursor);
+    connect(m_recommendHelpBtn, &QPushButton::clicked, this, &MusicPlayerDialog::showRecommendHelpDialog);
 
     auto clearPlaylistBtn = new QPushButton("清空列表", playTabWidget);
     clearPlaylistBtn->setStyleSheet(
@@ -501,7 +546,12 @@ void MusicPlayerDialog::setupUi()
     connect(clearPlaylistBtn, &QPushButton::clicked, this, []() {
         MusicPlayerManager::instance()->clearPlaylist();
     });
+
     playActionBar->addWidget(autoRemoveCheck);
+    playActionBar->addSpacing(6);
+    playActionBar->addWidget(modeLabel);
+    playActionBar->addWidget(m_recommendModeCombo);
+    playActionBar->addWidget(m_recommendHelpBtn);
     playActionBar->addStretch();
     playActionBar->addWidget(clearPlaylistBtn);
     playTabLayout->addLayout(playActionBar);
@@ -1020,4 +1070,82 @@ bool MusicPlayerDialog::eventFilter(QObject *watched, QEvent *event)
         }
     }
     return QDialog::eventFilter(watched, event);
+}
+
+void MusicPlayerDialog::refreshRecommendModeUI()
+{
+    if (!m_recommendModeCombo) return;
+    QString mode = MusicFavoriteDb::instance()->getRecommendationMode();
+    int idx = m_recommendModeCombo->findData(mode);
+    if (idx >= 0 && idx != m_recommendModeCombo->currentIndex()) {
+        m_recommendModeCombo->blockSignals(true);
+        m_recommendModeCombo->setCurrentIndex(idx);
+        m_recommendModeCombo->blockSignals(false);
+    }
+}
+
+void MusicPlayerDialog::showRecommendHelpDialog()
+{
+    auto helpDlg = new QDialog(this);
+    helpDlg->setWindowTitle("💡 音乐推荐模式与问答框指令说明");
+    helpDlg->setFixedSize(500, 430);
+    helpDlg->setStyleSheet(
+        "QDialog {"
+        "  background-color: #ffffff;"
+        "  border-radius: 12px;"
+        "}"
+    );
+    auto layout = new QVBoxLayout(helpDlg);
+    layout->setContentsMargins(20, 20, 20, 20);
+    layout->setSpacing(12);
+
+    auto titleLabel = new QLabel("🎯 <b>智能音乐推荐模式说明</b>", helpDlg);
+    titleLabel->setStyleSheet("font-size: 15px; color: #0f172a; font-weight: bold;");
+    layout->addWidget(titleLabel);
+
+    auto textBrowser = new QLabel(
+        "<div style=\"color: #334155; font-size: 12.5px; line-height: 1.6;\">"
+        "<p><b>三大智能推荐模式（每次精选 6 首）：</b></p>"
+        "<ul style=\"margin-top: 4px; margin-bottom: 8px; padding-left: 20px;\">"
+        "  <li><b>💖 熟悉模式 (familiar)：</b>从您的收藏池与喜好偏好衍生推荐 6 首好歌；</li>"
+        "  <li><b>🚀 探索模式 (explore)：</b>不局限现有收藏，直接检索全网最新爆款热歌；</li>"
+        "  <li><b>🎲 随机模式 (random)：</b>从您的「喜好标签」中随机组合推荐。</li>"
+        "</ul>"
+        "<p><b>🛡️ 去重机制：</b>系统自动维护近期推荐历史缓存，连续推荐不会重复拉取相同歌曲。</p>"
+        "<hr style=\"border: none; border-top: 1px solid #e2e8f0; margin: 8px 0;\"/>"
+        "<p><b>💬 如何在桌宠问答框中直接对话使用：</b></p>"
+        "<ul style=\"margin-top: 4px; margin-bottom: 8px; padding-left: 20px;\">"
+        "  <li><b>点歌推荐：</b>「推荐点音乐」/「用探索模式放歌」/「放几首民谣」</li>"
+        "  <li><b>模式切换：</b>「切换到探索模式」/「切换到熟悉模式」/「切换到随机模式」</li>"
+        "  <li><b>查看画像：</b>「查看我的喜好标签」/「我的音乐偏好」</li>"
+        "  <li><b>添加标签：</b>「添加喜好标签：摇滚、周杰伦、赛博朋克」</li>"
+        "  <li><b>删除标签：</b>「删除喜好标签：古风」</li>"
+        "  <li><b>联网搜歌：</b>「帮我搜一下抖音最近热歌加到播放列表」</li>"
+        "</ul>"
+        "</div>", helpDlg);
+    textBrowser->setWordWrap(true);
+    layout->addWidget(textBrowser);
+
+    auto btnBox = new QHBoxLayout();
+    btnBox->addStretch();
+    auto okBtn = new QPushButton("我知道啦 ✨", helpDlg);
+    okBtn->setStyleSheet(
+        "QPushButton {"
+        "  background: #6366f1;"
+        "  color: #ffffff;"
+        "  font-weight: 600;"
+        "  font-size: 12.5px;"
+        "  border: none;"
+        "  border-radius: 8px;"
+        "  padding: 6px 18px;"
+        "}"
+        "QPushButton:hover { background: #4f46e5; }"
+    );
+    okBtn->setCursor(Qt::PointingHandCursor);
+    connect(okBtn, &QPushButton::clicked, helpDlg, &QDialog::accept);
+    btnBox->addWidget(okBtn);
+    layout->addLayout(btnBox);
+
+    helpDlg->exec();
+    helpDlg->deleteLater();
 }

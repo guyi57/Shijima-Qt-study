@@ -6,6 +6,10 @@
 #include <QRandomGenerator>
 #include <cmath>
 
+#include <QGuiApplication>
+#include <QScreen>
+#include <algorithm>
+
 TrashTargetWidget::TrashTargetWidget(QWidget *parent)
     : QWidget(parent)
 {
@@ -43,8 +47,80 @@ void TrashTargetWidget::initParticles() {
     }
 }
 
+void TrashTargetWidget::captureAndComputeLensing() {
+    auto screen = QGuiApplication::primaryScreen();
+    if (!screen) return;
+
+    // 捕获黑洞窗口正后方的屏幕底色与桌面文字/图标
+    QPixmap rawBg = screen->grabWindow(0, m_globalPos.x(), m_globalPos.y(), width(), height());
+    if (rawBg.isNull()) return;
+
+    QImage srcImg = rawBg.toImage().convertToFormat(QImage::Format_ARGB32_Premultiplied);
+    QImage dstImg = QImage(width(), height(), QImage::Format_ARGB32_Premultiplied);
+    dstImg.fill(Qt::transparent);
+
+    int w = srcImg.width();
+    int h = srcImg.height();
+    double cx = w / 2.0;
+    double cy = h / 2.0;
+    double einsteinRadius = 38.0; // 爱因斯坦引力透镜偏折半径
+    double einsteinSq = einsteinRadius * einsteinRadius;
+    double maxLensRadius = 92.0;
+    double eventHorizonRadius = 14.0;
+
+    for (int y = 0; y < h; ++y) {
+        QRgb *dstLine = reinterpret_cast<QRgb*>(dstImg.scanLine(y));
+        const QRgb *srcLine = reinterpret_cast<const QRgb*>(srcImg.constScanLine(y));
+        double dy = y - cy;
+        for (int x = 0; x < w; ++x) {
+            double dx = x - cx;
+            double r = std::sqrt(dx * dx + dy * dy);
+
+            if (r < maxLensRadius && r > eventHorizonRadius) {
+                // 爱因斯坦薄透镜引力偏折公式: r' = r - (r_E^2 / r)
+                double rDeflected = r - (einsteinSq / r);
+                double factor = rDeflected / r;
+
+                // 引力色散与光线弯曲采样 (RGB微小频移)
+                int sxR = std::clamp(static_cast<int>(cx + dx * (factor * 0.982)), 0, w - 1);
+                int syR = std::clamp(static_cast<int>(cy + dy * (factor * 0.982)), 0, h - 1);
+                int sxG = std::clamp(static_cast<int>(cx + dx * factor), 0, w - 1);
+                int syG = std::clamp(static_cast<int>(cy + dy * factor), 0, h - 1);
+                int sxB = std::clamp(static_cast<int>(cx + dx * (factor * 1.018)), 0, w - 1);
+                int syB = std::clamp(static_cast<int>(cy + dy * (factor * 1.018)), 0, h - 1);
+
+                QRgb colR = srcImg.pixel(sxR, syR);
+                QRgb colG = srcImg.pixel(sxG, syG);
+                QRgb colB = srcImg.pixel(sxB, syB);
+
+                // 边缘平滑羽化融合
+                double edgeFade = 1.0;
+                if (r > maxLensRadius - 16.0) {
+                    edgeFade = (maxLensRadius - r) / 16.0;
+                }
+                edgeFade = std::clamp(edgeFade, 0.0, 1.0);
+
+                int rVal = static_cast<int>(qRed(colR) * edgeFade + qRed(srcLine[x]) * (1.0 - edgeFade));
+                int gVal = static_cast<int>(qGreen(colG) * edgeFade + qGreen(srcLine[x]) * (1.0 - edgeFade));
+                int bVal = static_cast<int>(qBlue(colB) * edgeFade + qBlue(srcLine[x]) * (1.0 - edgeFade));
+                int aVal = static_cast<int>(255 * edgeFade);
+
+                dstLine[x] = qRgba(rVal, gVal, bVal, aVal);
+            } else {
+                dstLine[x] = qRgba(0, 0, 0, 0);
+            }
+        }
+    }
+    m_lensBgImage = dstImg;
+}
+
 void TrashTargetWidget::showAt(const QPointF &pos) {
-    move(pos.toPoint().x() - width() / 2, pos.toPoint().y() - height() / 2);
+    m_globalPos = pos.toPoint() - QPoint(width() / 2, height() / 2);
+    move(m_globalPos);
+
+    // 撕裂生成前截取真实屏幕背景并计算引力透镜弯曲
+    captureAndComputeLensing();
+
     m_opacity = 0.0;
     m_scale = 0.15;
     m_targetScale = 1.0;
@@ -123,7 +199,12 @@ void TrashTargetWidget::paintEvent(QPaintEvent *) {
     painter.scale(m_scale, m_scale);
     painter.setOpacity(m_opacity);
 
-    // 1. 卡冈图雅黄金吸积盘辉光底晕 (Accretion Disc Ambient Corona Glow)
+    // 1. 爱因斯坦引力透镜弯曲背景 (Gravitational Lensing Distortion)
+    if (!m_lensBgImage.isNull()) {
+        painter.drawImage(QRectF(-width() / 2.0, -height() / 2.0, width(), height()), m_lensBgImage);
+    }
+
+    // 2. 卡冈图雅黄金吸积盘辉光底晕 (Accretion Disc Ambient Corona Glow)
     double glowSize = 95.0 + 5.0 * std::sin(m_glowPhase);
     QRadialGradient outerGlow(0, 0, glowSize);
     outerGlow.setColorAt(0.0, QColor(254, 240, 138, m_absorbing ? 230 : 160));
@@ -134,7 +215,7 @@ void TrashTargetWidget::paintEvent(QPaintEvent *) {
     painter.setPen(Qt::NoPen);
     painter.drawEllipse(QPointF(0, 0), glowSize, glowSize * 0.7);
 
-    // 2. 绘制高清《星际穿越》卡冈图雅黑洞本体 (Gargantua Ultra-HD Texture)
+    // 3. 绘制高清《星际穿越》卡冈图雅黑洞本体 (Gargantua Ultra-HD Texture)
     if (!m_gargantuaPixmap.isNull()) {
         int imgW = 210;
         int imgH = static_cast<int>(imgW * (560.0 / 880.0)); // 保持 1.57:1 比例
@@ -142,7 +223,7 @@ void TrashTargetWidget::paintEvent(QPaintEvent *) {
         painter.drawPixmap(drawRect.toRect(), m_gargantuaPixmap);
     }
 
-    // 3. 动态绘制围绕吸入的黄金与星光光子粒子 (Orbiting Photon Particles)
+    // 4. 动态绘制围绕吸入的黄金与星光光子粒子 (Orbiting Photon Particles)
     for (const auto &p : m_particles) {
         double px = p.radius * std::cos(p.angle);
         double py = (p.radius * 0.42) * std::sin(p.angle); // 椭圆吸积盘倾角
@@ -150,7 +231,7 @@ void TrashTargetWidget::paintEvent(QPaintEvent *) {
         painter.drawEllipse(QPointF(px, py), p.size, p.size);
     }
 
-    // 4. 事件视界中心深空奇点微光
+    // 5. 事件视界中心深空奇点微光
     if (m_absorbing) {
         painter.setBrush(QColor(255, 255, 255, 240));
         painter.drawEllipse(QPointF(0, 0), 4.0, 4.0);

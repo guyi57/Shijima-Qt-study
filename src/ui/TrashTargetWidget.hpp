@@ -29,6 +29,9 @@ private:
     double m_absorbProgress = 0.0;
     QTimer *m_animTimer = nullptr;
     QPixmap m_gargantuaPixmap;
+    QImage m_lensBgImage;
+    QPoint m_globalPos;
+    void captureAndComputeLensing();
 
     struct Particle {
         double angle;

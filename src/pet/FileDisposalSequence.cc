@@ -86,8 +86,11 @@ void FileDisposalSequence::start(ShijimaWidget *pet, const QString &fileName, co
     m_trashWidget = new TrashTargetWidget();
     m_trashWidget->showAt(m_blackHolePos);
 
-    // 暂停日常自发漫游逻辑，转由本序列驱动
+    // 暂停日常自发漫游逻辑，接管物理引力控制
     pet->m_paused = true;
+    if (pet->mascot().state) {
+        pet->mascot().state->dragging = true;
+    }
     pet->showMessage(QString("👀 发现待处理文件！正在全速赶往现场~"), 2000);
 
     // 启动序列定时器 (30ms = ~33fps 丝滑刷新)
@@ -101,6 +104,12 @@ void FileDisposalSequence::step() {
     }
 
     auto state = m_pet->mascot().state;
+    if (!state) {
+        finish();
+        return;
+    }
+
+    state->dragging = true; // 持续锁定物理引擎，防止误判下落
     m_stageTickCount++;
 
     // =========================================================================
@@ -129,6 +138,7 @@ void FileDisposalSequence::step() {
         if (reachedPetTarget || m_stageTickCount >= 85) { // 约 2.5s 超时强制进入就位
             m_stage = 1;
             m_stageTickCount = 0;
+            state->anchor.y = m_petTargetPos.y();
             m_pet->showMessage(m_pushingToRight ? "💪 趴地向前推进黑洞！>>>" : "<<< 💪 趴地向前推进黑洞！", 1500);
         }
     }
@@ -137,6 +147,7 @@ void FileDisposalSequence::step() {
     // =========================================================================
     else if (m_stage == 1) {
         state->looking_right = m_pushingToRight;
+        state->anchor.y = m_petTargetPos.y();
         if (!m_pet->trySetBehavior("CrawlAlongWorkAreaFloor")) {
             if (!m_pet->trySetBehavior("CrawlAlongIECeiling")) {
                 m_pet->trySetBehavior("SitDown");
@@ -153,6 +164,7 @@ void FileDisposalSequence::step() {
     // =========================================================================
     else if (m_stage == 2) {
         state->looking_right = m_pushingToRight;
+        state->anchor.y = m_petTargetPos.y();
         if (!m_pet->trySetBehavior("CrawlAlongWorkAreaFloor")) {
             if (!m_pet->trySetBehavior("CrawlAlongIECeiling")) {
                 m_pet->trySetBehavior("WalkAlongWorkAreaFloor");
@@ -187,6 +199,7 @@ void FileDisposalSequence::step() {
     // 阶段 3: 推入黑洞事件视界 (Toss into Black Hole vortex & absorb)
     // =========================================================================
     else if (m_stage == 3) {
+        state->anchor.y = m_petTargetPos.y();
         if (m_stageTickCount == 1) {
             if (!m_pet->trySetBehavior("WalkAndThrowIEFromRight")) {
                 if (!m_pet->trySetBehavior("ThrowIEFromRight")) {
@@ -220,15 +233,19 @@ void FileDisposalSequence::step() {
     // 阶段 4: 庆祝与收尾恢复
     // =========================================================================
     else if (m_stage == 4) {
+        state->anchor.y = m_petTargetPos.y();
         if (m_stageTickCount >= 28) {
             finish();
             return;
         }
     }
 
-    // 核心保证：每一帧都推进底层动画、真实平移窗口坐标并重绘
+    // 核心保证：每一帧都推进底层动画、锁定坐标并重绘
     if (m_pet) {
         m_pet->mascot().tick();
+        if (m_stage >= 1 && m_stage <= 4 && m_pet->mascot().state) {
+            m_pet->mascot().state->anchor.y = m_petTargetPos.y();
+        }
         m_pet->updateOffsets();
         m_pet->repaint();
     }
@@ -251,6 +268,9 @@ void FileDisposalSequence::finish() {
     }
 
     if (m_pet) {
+        if (m_pet->mascot().state) {
+            m_pet->mascot().state->dragging = false;
+        }
         m_pet->m_paused = false;
         m_pet = nullptr;
     }

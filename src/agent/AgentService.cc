@@ -34,20 +34,33 @@
 static QJsonObject getMusicToolDefinition() {
     QJsonObject fn;
     fn["name"] = "music_player_manage";
-    fn["description"] = "控制音乐播放器播放音乐、暂停、切歌、搜索歌曲、收藏/取消收藏、查看收藏列表或获取当前曲目。当用户要求放歌、听音乐、搜歌、暂停、下一首、上一首、收藏歌曲、查看收藏列表时调用此工具。";
+    fn["description"] = "控制音乐播放器播放音乐、暂停、切歌、搜索歌曲、收藏/取消收藏、查看收藏列表、获取当前曲目，或批量推荐歌曲并加入播放列表。当用户要求放歌、听音乐、搜歌、推荐歌单（如民谣、抖音热歌等）、批量加歌到播放列表、暂停、下一首、上一首、收藏歌曲时调用此工具。";
 
     QJsonObject props;
     
     QJsonObject actionProp;
     actionProp["type"] = "string";
-    actionProp["enum"] = QJsonArray{"search_and_play", "pause", "resume", "toggle_play", "next", "previous", "favorite", "list_favorites", "get_current", "open_window"};
-    actionProp["description"] = "操作类型: search_and_play(搜索并播放), pause(暂停), resume(继续播放), toggle_play(播放/暂停切换), next(下一首), previous(上一首), favorite(收藏/取消收藏当前歌曲), list_favorites(查看收藏列表), get_current(获取当前播放歌曲), open_window(打开音乐播放器窗口)";
+    actionProp["enum"] = QJsonArray{"search_and_play", "batch_search_and_add", "pause", "resume", "toggle_play", "next", "previous", "favorite", "list_favorites", "get_current", "open_window"};
+    actionProp["description"] = "操作类型: batch_search_and_add(批量推荐/搜歌并加入播放列表), search_and_play(搜索单曲并播放), pause(暂停), resume(继续播放), toggle_play(播放/暂停切换), next(下一首), previous(上一首), favorite(收藏/取消收藏当前歌曲), list_favorites(查看收藏列表), get_current(获取当前播放歌曲), open_window(打开音乐播放器窗口)";
     props["action"] = actionProp;
 
     QJsonObject keywordProp;
     keywordProp["type"] = "string";
     keywordProp["description"] = "若为 search_and_play，要搜索并播放的歌名、歌手或关键词（如'周杰伦 晴天'、'轻音乐'、'起风了'）";
     props["keyword"] = keywordProp;
+
+    QJsonObject keywordsProp;
+    keywordsProp["type"] = "array";
+    QJsonObject kwItem;
+    kwItem["type"] = "string";
+    keywordsProp["items"] = kwItem;
+    keywordsProp["description"] = "若为 batch_search_and_add，要批量搜索并添加到播放列表的歌曲名称列表（例如 [\"若月亮没来\", \"鲜花 房东的猫\", \"漠河舞厅 柳爽\"]）";
+    props["keywords"] = keywordsProp;
+
+    QJsonObject playNowProp;
+    playNowProp["type"] = "boolean";
+    playNowProp["description"] = "若为 batch_search_and_add，添加完成后是否立即开始播放第一首（默认为 true）";
+    props["play_now"] = playNowProp;
 
     QJsonObject sourceProp;
     sourceProp["type"] = "string";
@@ -59,11 +72,6 @@ static QJsonObject getMusicToolDefinition() {
     params["type"] = "object";
     params["properties"] = props;
     params["required"] = QJsonArray{"action"};
-
-    QJsonObject tool;
-    tool["type"] = "function";
-    tool["function"] = fn;
-    tool["function"].toObject()["parameters"] = params;
 
     QJsonObject result;
     result["type"] = "function";
@@ -77,7 +85,76 @@ static void executeMusicTool(const QJsonObject &args, std::function<void(QString
     QString action = args["action"].toString().trimmed();
     std::cout << "[MusicTool] 执行音乐指令: action=" << action.toStdString() << std::endl;
 
-    if (action == "search_and_play") {
+    if (action == "batch_search_and_add") {
+        auto kwArray = args["keywords"].toArray();
+        QStringList keywordsList;
+        for (auto kwVal : kwArray) {
+            QString kw = kwVal.toString().trimmed();
+            if (!kw.isEmpty()) keywordsList.append(kw);
+        }
+        if (keywordsList.isEmpty() && args.contains("keyword")) {
+            QString kw = args["keyword"].toString().trimmed();
+            if (!kw.isEmpty()) keywordsList.append(kw);
+        }
+        if (keywordsList.isEmpty()) {
+            if (callback) callback("⚠️ 请提供要批量搜索添加的歌曲名称列表哦～");
+            return;
+        }
+
+        QString source = args.contains("source") ? args["source"].toString("netease") : "netease";
+        bool playNow = args.contains("play_now") ? args["play_now"].toBool(true) : true;
+
+        auto collectedSongs = std::make_shared<QVector<SongInfo>>();
+        auto remainingCount = std::make_shared<int>(keywordsList.size());
+        auto mtx = std::make_shared<std::mutex>();
+
+        for (const QString &kw : keywordsList) {
+            MusicApiService::instance()->search(kw, source, 1, 1, [kw, source, collectedSongs, remainingCount, mtx, playNow, callback](bool success, const QVector<SongInfo>& songs, const QString &) {
+                {
+                    std::lock_guard<std::mutex> lock(*mtx);
+                    if (success && !songs.isEmpty()) {
+                        collectedSongs->append(songs.first());
+                    }
+                    (*remainingCount)--;
+                    if (*remainingCount > 0) {
+                        return;
+                    }
+                }
+
+                // 所有歌曲检索完毕
+                if (collectedSongs->isEmpty()) {
+                    if (callback) callback("⚠️ 未能在音乐库中搜索到相关歌曲，请尝试更换歌名或音乐源。");
+                    return;
+                }
+
+                // 批量追加到播放器播放列表
+                MusicPlayerManager::instance()->addBatchToPlaylist(*collectedSongs);
+
+                if (playNow) {
+                    MusicPlayerManager::instance()->playSong(collectedSongs->first());
+                }
+
+                QString res = QString("🎉 **已为您搜集并添加 %1 首热门歌曲到播放列表！**\n\n"
+                                      "| 序号 | 🎶 歌曲名 | 🎤 歌手 | 🌐 音乐源 |\n"
+                                      "| :--- | :--- | :--- | :--- |\n").arg(collectedSongs->size());
+
+                for (int i = 0; i < collectedSongs->size(); ++i) {
+                    const auto &s = (*collectedSongs)[i];
+                    res += QString("| %1 | **%2** | %3 | %4 |\n")
+                        .arg(i + 1)
+                        .arg(s.name, s.artist.isEmpty() ? "未知歌手" : s.artist, MusicApiService::sourceDisplayName(s.source));
+                }
+
+                if (playNow) {
+                    res += QString("\n▶️ **正在为您播放第一首：** 《%1》 - %2 🎶").arg(collectedSongs->first().name, collectedSongs->first().artist);
+                }
+
+                if (callback) callback(res);
+            });
+        }
+        return;
+    }
+    else if (action == "search_and_play") {
         QString keyword = args["keyword"].toString().trimmed();
         QString source = args.contains("source") ? args["source"].toString("netease") : "netease";
         if (keyword.isEmpty()) {
@@ -676,9 +753,22 @@ void AgentService::ask(QString const& contextText,
         }
     }
 
-    // 智能分流判定：若配置为 aipy 智能体，或包含通用任务指令关键词（非纯定时需求）
+    // 智能分流判定：若包含音乐播放/推荐/歌单/搜歌等意图，走音乐工具
+    bool isMusicIntent = false;
+    static const QStringList musicKeywords = {
+        "歌", "音乐", "播放", "暂停", "下一首", "上一首", "切歌", "放一首", "听歌",
+        "民谣", "播放列表", "加歌", "歌单", "music", "song", "play", "playlist", "推荐点"
+    };
+    for (const auto &kw : musicKeywords) {
+        if (qLower.contains(kw)) {
+            isMusicIntent = true;
+            break;
+        }
+    }
+
+    // 智能分流判定：若配置为 aipy 智能体，或包含通用任务指令关键词（非纯定时/音乐需求）
     bool isTaskIntent = false;
-    if (!isTimerIntent) {
+    if (!isTimerIntent && !isMusicIntent) {
         if (m_config.routingMode == "ALWAYS_AGENT") {
             isTaskIntent = true;
         } else if (m_config.routingMode == "ALWAYS_LLM") {
@@ -721,7 +811,7 @@ void AgentService::ask(QString const& contextText,
         return;
     }
 
-    // 默认直连大模型问答（注入当前本地系统时间、人格设定与定时器 Tool 指南）
+    // 默认直连大模型问答（注入当前本地系统时间、人格设定、定时器 Tool 与音乐播放器 Tool 指南）
     QString currentLocalTime = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss dddd");
     QString personaPrompt = PersonaManager::instance()->buildEffectiveSystemPrompt();
 
@@ -731,27 +821,19 @@ void AgentService::ask(QString const& contextText,
     sysMsg["content"] = QString(
         "%1\n\n"
         "【当前本地真实系统时间】: %2。\n"
-        "你拥有管理本地系统定时器与定时任务的工具（timer_manage）。\n"
+        "你拥有管理本地系统定时器工具（timer_manage）与音乐播放器工具（music_player_manage）。\n"
+        "【音乐播放与歌单推荐工具指南】\n"
+        "1. 批量推荐歌曲并加入播放列表: action='batch_search_and_add', keywords=['歌名1 歌手', '歌名2', '歌名3', ...], play_now=true\n"
+        "   - 当用户要求推荐某类歌曲（如抖音热歌、民谣、流行、治愈系、轻音乐、工作专注歌单等）或要求批量加歌时，请挑出 3~6 首最经典贴切的热门曲目，调用 batch_search_and_add！\n"
+        "2. 搜索单曲并播放: action='search_and_play', keyword='歌名或歌手'\n"
+        "3. 播放控制: action='pause'(暂停), 'resume'(继续), 'next'(下一首), 'previous'(上一首), 'list_favorites'(查看收藏)\n\n"
         "【定时器功能支持灵活组合】\n"
         "1. 单次倒计时/定时刻: repeat='once', trigger_in_seconds 或 target_time='2026-08-24 15:00'\n"
         "2. 每天固定时刻: repeat='daily', daily_time='09:00', 可配合 days_of_week 指定任意星期\n"
         "3. 全天固定循环: repeat='interval', repeat_interval_seconds=1800 (每30分钟)\n"
         "4. 指定时间段内按间隔循环: repeat='window_interval', start_time='09:00', end_time='18:00', repeat_interval_seconds=3600\n"
-        "5. 星期过滤: days_of_week 可自由指定任意组合 (1=周一, 2=周二, ..., 7=周日)，例如周一/周三/周五填 [1, 3, 5]，周末填 [6, 7]，工作日填 [1, 2, 3, 4, 5]，每天填 [1, 2, 3, 4, 5, 6, 7]\n\n"
-        "当用户提出定时需求时，请调用 timer_manage 工具；若模型不支持 tool_calls，请在回答末尾输出纯 JSON 代码块：\n"
-        "```json\n"
-        "{\n"
-        "  \"tool\": \"timer_manage\",\n"
-        "  \"action\": \"create\",\n"
-        "  \"title\": \"走一走活动提醒\",\n"
-        "  \"type\": \"notification\",\n"
-        "  \"repeat\": \"window_interval\",\n"
-        "  \"start_time\": \"09:00\",\n"
-        "  \"end_time\": \"18:00\",\n"
-        "  \"repeat_interval_seconds\": 3600,\n"
-        "  \"days_of_week\": [1, 2, 3, 4, 5]\n"
-        "}\n"
-        "```\n"
+        "5. 星期过滤: days_of_week 可自由指定任意组合 (1=周一, 2=周二, ..., 7=周日)\n\n"
+        "当需要调用工具但模型环境不支持 tool_calls 时，可在回答末尾输出对应的纯 JSON 代码块。\n"
         "请结合上下文和用户的参考文本，给出符合你人格设定的准确、简洁、友善的回答，适合在桌面气泡中阅读。"
     ).arg(personaPrompt, currentLocalTime);
     messages.append(sysMsg);

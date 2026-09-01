@@ -28,6 +28,7 @@
 #include "SystemObserver.hpp"
 #include "MusicFavoriteDb.hpp"
 #include "SettingsDb.hpp"
+#include "TrashWatcher.hpp"
 #include "cli.hpp"
 #include <httplib.h>
 
@@ -66,6 +67,7 @@ int main(int argc, char **argv) {
         MusicFavoriteDb::instance()->initDb();
         BehaviorEngine::instance()->start();
         SystemObserver::instance()->start();
+        TrashWatcher::instance()->init();
     }
     catch (std::exception &ex) {
         QMessageBox *msg = new QMessageBox {};

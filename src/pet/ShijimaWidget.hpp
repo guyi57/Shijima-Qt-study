@@ -105,6 +105,8 @@ protected:
     void mousePressEvent(QMouseEvent *) override;
     void mouseMoveEvent(QMouseEvent *) override;
     void mouseReleaseEvent(QMouseEvent *) override;
+    void dragEnterEvent(QDragEnterEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
 private:
     void setDragTarget(ShijimaWidget *target);
     void snapToNearestBorderOrWindow();

@@ -38,6 +38,12 @@
 #include "AskDialog.hpp"
 #include "AgentService.hpp"
 #include "AgentSettingsDialog.hpp"
+#include "FileDisposalSequence.hpp"
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <QUrl>
+#include <QFileInfo>
 #include "TimerManager.hpp"
 #include "TimerListDialog.hpp"
 #include "AgentSettingsDialog.hpp"
@@ -88,6 +94,7 @@ ShijimaWidget::ShijimaWidget(MascotData *mascotData,
         #endif
         setWindowFlags(flags);
     }
+    setAcceptDrops(true);
     setFixedSize(m_windowWidth, m_windowHeight);
     m_messageBubble = new MessageBubble(m_windowedMode ? parent : nullptr);
     m_selectionToolbar = new SelectionToolbar(m_windowedMode ? parent : nullptr);
@@ -787,6 +794,31 @@ void ShijimaWidget::mouseReleaseEvent(QMouseEvent *event) {
     }
 }
 
+void ShijimaWidget::dragEnterEvent(QDragEnterEvent *event) {
+    if (event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+    }
+}
+
+void ShijimaWidget::dropEvent(QDropEvent *event) {
+    const auto urls = event->mimeData()->urls();
+    if (urls.isEmpty()) return;
+
+    QString localPath = urls.first().toLocalFile();
+    if (localPath.isEmpty()) return;
+
+    QFileInfo fi(localPath);
+    QString fileName = fi.fileName();
+
+    // 真正将文件移入废纸篓 (macOS/Linux/Windows 原生安全回收站 API)
+    bool trashOk = QFile::moveToTrash(localPath);
+    std::cout << "[DragDrop] 拖拽删除文件: " << localPath.toStdString()
+              << " (移入废纸篓: " << (trashOk ? "成功" : "失败") << ")" << std::endl;
+
+    // 触发连贯搬运扔进废纸篓动画
+    FileDisposalSequence::instance()->start(this, fileName);
+    event->acceptProposedAction();
+}
 
 void ShijimaWidget::applyThrowPhysics(double vx, double vy) {
     if (!m_mascot || !m_mascot->state || !m_mascot->state->env) return;

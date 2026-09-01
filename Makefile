@@ -50,6 +50,7 @@ SOURCES = src/main.cc \
 	src/music/MusicPlayerDialog.cc \
 	src/timer/TimerManager.cc \
 	src/timer/TimerListDialog.cc \
+	src/system/TrashWatcher.cc \
 	$(PLATFORM_SYSTEM_SOURCES) \
 	src/ui/FloatingFileWidget.cc \
 	src/ui/MessageBubble.cc \

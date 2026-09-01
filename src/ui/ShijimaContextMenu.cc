@@ -220,15 +220,32 @@ ShijimaContextMenu::ShijimaContextMenu(ShijimaWidget *parent)
     // Check for Updates
     action = addAction("🔄 检查更新...");
     connect(action, &QAction::triggered, [this](){
-        UpdateManager::instance()->checkForUpdates(false /* not silent */, [this](const UpdateInfo &info, const QString &err) {
+        auto pet = shijimaParent();
+        if (pet) {
+            pet->showMessage("🔍 正在检查 GitHub 最新版本...", 2000);
+        }
+        UpdateManager::instance()->checkForUpdates(false /* not silent */, [pet](const UpdateInfo &info, const QString &err) {
             if (!err.isEmpty()) {
-                QMessageBox::warning(shijimaParent(), "检查更新失败", err);
+                if (pet) {
+                    pet->showMessage("❌ 检查更新失败: " + err, 4000);
+                } else {
+                    QMessageBox::warning(nullptr, "检查更新失败", err);
+                }
             } else if (info.hasUpdate) {
-                auto dialog = new UpdateDialog(info, shijimaParent());
+                if (pet) {
+                    pet->showMessage(QString("🎉 发现新版本 %1！正在打开更新窗口...").arg(info.remoteVersion), 3000);
+                }
+                auto dialog = new UpdateDialog(info, nullptr);
                 dialog->setAttribute(Qt::WA_DeleteOnClose);
                 dialog->show();
+                dialog->raise();
+                dialog->activateWindow();
             } else {
-                QMessageBox::information(shijimaParent(), "检查更新", QString("🎉 当前已是最新版本 (v%1)！").arg(info.currentVersion));
+                if (pet) {
+                    pet->showMessage(QString("🎉 当前已是最新版本 (v%1)，无需更新！").arg(info.currentVersion), 4000);
+                } else {
+                    QMessageBox::information(nullptr, "检查更新", QString("🎉 当前已是最新版本 (v%1)！").arg(info.currentVersion));
+                }
             }
         });
     });

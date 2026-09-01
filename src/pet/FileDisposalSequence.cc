@@ -1,6 +1,7 @@
 #include "FileDisposalSequence.hpp"
 #include "ShijimaWidget.hpp"
 #include "FloatingFileWidget.hpp"
+#include "TrashTargetWidget.hpp"
 #include "BehaviorEngine.hpp"
 #include <QGuiApplication>
 #include <QScreen>
@@ -33,19 +34,20 @@ void FileDisposalSequence::start(ShijimaWidget *pet, const QString &fileName) {
     m_stageTickCount = 0;
 
     auto screen = QGuiApplication::primaryScreen();
-    QRect screenGeom = screen ? screen->availableGeometry() : QRect(0, 0, 1920, 1080);
+    // 使用完整屏幕尺寸定位右下角真实废纸篓
+    QRect screenGeom = screen ? screen->geometry() : QRect(0, 0, 1920, 1080);
 
-    // 确定垃圾桶位置 (屏幕右下角)
-    m_trashPos = QPointF(screenGeom.right() - 90, screenGeom.bottom() - 30);
+    // 屏幕右下角废纸篓真实像素位置
+    m_trashPos = QPointF(screenGeom.right() - 55, screenGeom.bottom() - 40);
 
     // 确定文件刷新位置
     double currentX = pet->mascot().state->anchor.x;
-    double fileX = currentX - 240;
+    double fileX = currentX - 220;
     if (fileX < screenGeom.left() + 80) {
-        fileX = currentX + 240;
+        fileX = currentX + 220;
     }
-    if (fileX > screenGeom.right() - 160) {
-        fileX = screenGeom.right() - 260;
+    if (fileX > m_trashPos.x() - 180) {
+        fileX = m_trashPos.x() - 260;
     }
     double fileY = screenGeom.bottom() - 25;
 
@@ -55,9 +57,13 @@ void FileDisposalSequence::start(ShijimaWidget *pet, const QString &fileName) {
     m_fileWidget = new FloatingFileWidget(m_fileName);
     m_fileWidget->spawnAt(m_fileSpawnPos);
 
+    // 在右下角废纸篓位置点亮发光提示目标
+    m_trashWidget = new TrashTargetWidget();
+    m_trashWidget->showAt(m_trashPos);
+
     // 暂停日常自发漫游逻辑，转由本序列逐帧精细驱动
     pet->m_paused = true;
-    pet->showMessage(QString("🗑️ 抓到了被删除的文件《%1》！").arg(m_fileName), 1800);
+    pet->showMessage(QString("🗑️ 发现待删除文件《%1》！").arg(m_fileName), 1800);
 
     // 启动序列定时器 (35ms = ~28fps 丝滑刷新)
     m_tickTimer->start(35);
@@ -82,7 +88,7 @@ void FileDisposalSequence::step() {
 
         if (std::abs(diffX) > 20.0) {
             m_pet->trySetBehavior("WalkAlongWorkAreaFloor");
-            double stepSpeed = 5.5;
+            double stepSpeed = 6.0;
             state->anchor.x += (movingRight ? stepSpeed : -stepSpeed);
             state->anchor.y = m_fileSpawnPos.y();
         } else {
@@ -100,14 +106,16 @@ void FileDisposalSequence::step() {
         if (m_stageTickCount >= 8) { // 280ms
             m_stage = 2;
             m_stageTickCount = 0;
-            m_pet->showMessage("💪 抓住啦！开始推向废纸篓~", 1500);
+            m_pet->showMessage("💪 抓住啦！一路推去右下角废纸篓~", 1600);
         }
     }
     // =========================================================================
-    // 阶段 2: 搬运/推向垃圾桶 (Push / Walk with File attached)
+    // 阶段 2: 搬运/推向垃圾桶 (Push / Walk straight to Trash position)
     // =========================================================================
     else if (m_stage == 2) {
-        double diffX = m_trashPos.x() - state->anchor.x;
+        // 桌宠目标坐标是垃圾桶左侧 60px，这样它推在身前的文件恰好贴在垃圾桶上
+        double targetPetX = m_trashPos.x() - 60.0;
+        double diffX = targetPetX - state->anchor.x;
         bool movingRight = (diffX > 0);
         state->looking_right = movingRight;
 
@@ -115,7 +123,7 @@ void FileDisposalSequence::step() {
             m_pet->trySetBehavior("WalkAlongWorkAreaFloor");
         }
 
-        double pushSpeed = 4.2;
+        double pushSpeed = 4.8;
         state->anchor.x += (movingRight ? pushSpeed : -pushSpeed);
         state->anchor.y = m_trashPos.y();
 
@@ -124,13 +132,14 @@ void FileDisposalSequence::step() {
             m_fileWidget->attachTo(QPointF(state->anchor.x, state->anchor.y), movingRight);
         }
 
-        if (std::abs(diffX) <= 50.0) {
+        // 一路走到垃圾桶跟前
+        if (diffX <= 15.0) {
             m_stage = 3;
             m_stageTickCount = 0;
         }
     }
     // =========================================================================
-    // 阶段 3: 扔进垃圾桶 (ThrowWindow 挥臂甩出)
+    // 阶段 3: 扔进垃圾桶 (ThrowWindow 挥臂甩出并吸收)
     // =========================================================================
     else if (m_stage == 3) {
         if (m_stageTickCount == 1) {
@@ -139,21 +148,24 @@ void FileDisposalSequence::step() {
                     m_pet->trySetBehavior("SitAndSpinHead");
                 }
             }
-            // 触发抛物线下落动画
+            // 触发抛物线下落动画并播放垃圾桶吞入特效
             if (m_fileWidget) {
                 m_fileWidget->tossTo(m_trashPos, [this]() {
+                    if (m_trashWidget) {
+                        m_trashWidget->playAbsorbEffect();
+                    }
                     m_fileWidget = nullptr;
                 });
             }
         }
 
-        if (m_stageTickCount >= 20) { // 约 700ms 甩出动画完成
+        if (m_stageTickCount >= 22) { // 约 770ms 甩出动画完成
             m_stage = 4;
             m_stageTickCount = 0;
             if (!m_pet->trySetBehavior("SitWhileDanglingLegs")) {
                 m_pet->trySetBehavior("SitAndFaceMouse");
             }
-            m_pet->showMessage(QString("✨ 呼~ 成功将《%1》扔进废纸篓啦！🧹").arg(m_fileName), 3000);
+            m_pet->showMessage(QString("✨ 呼~ 成功将《%1》扔进系统废纸篓啦！🧹").arg(m_fileName), 3000);
         }
     }
     // =========================================================================
@@ -166,7 +178,7 @@ void FileDisposalSequence::step() {
         }
     }
 
-    // 核心修复：每一帧都推进底层动画帧、同步更新桌宠真实窗口位置并重绘！
+    // 核心保证：每一帧都推进底层动画、真实平移窗口坐标并重绘
     m_pet->mascot().tick();
     m_pet->updateOffsets();
     m_pet->repaint();
@@ -181,6 +193,11 @@ void FileDisposalSequence::finish() {
     if (m_fileWidget) {
         m_fileWidget->close();
         m_fileWidget = nullptr;
+    }
+
+    if (m_trashWidget) {
+        m_trashWidget->dismiss();
+        m_trashWidget = nullptr;
     }
 
     if (m_pet) {

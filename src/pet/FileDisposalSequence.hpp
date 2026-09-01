@@ -7,6 +7,7 @@
 
 class ShijimaWidget;
 class FloatingFileWidget;
+class TrashTargetWidget;
 
 class FileDisposalSequence : public QObject {
 public:
@@ -27,6 +28,7 @@ private:
     bool m_running = false;
     ShijimaWidget *m_pet = nullptr;
     FloatingFileWidget *m_fileWidget = nullptr;
+    TrashTargetWidget *m_trashWidget = nullptr;
     QString m_fileName;
 
     int m_stage = 0; // 0: approach, 1: grab, 2: push, 3: throw, 4: celebrate

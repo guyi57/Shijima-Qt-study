@@ -53,6 +53,7 @@ SOURCES = src/main.cc \
 	src/system/TrashWatcher.cc \
 	$(PLATFORM_SYSTEM_SOURCES) \
 	src/ui/FloatingFileWidget.cc \
+	src/ui/TrashTargetWidget.cc \
 	src/ui/MessageBubble.cc \
 	src/ui/ScoreBadgeWidget.cc \
 	src/ui/PetStatusBarWidget.cc \

@@ -163,7 +163,7 @@ void McpClient::sendInitializeRequest() {
 
     QJsonObject clientInfo;
     clientInfo["name"] = "guyi-bot";
-    clientInfo["version"] = "1.2.0";
+    clientInfo["version"] = "1.2.2";
     params["clientInfo"] = clientInfo;
 
     QJsonObject capabilities;

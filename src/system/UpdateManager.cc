@@ -25,14 +25,14 @@ QString UpdateManager::getPlatformAssetKeyword() {
     #if defined(__arm64__) || defined(__aarch64__)
         return "macOS-AppleSilicon";
     #else
-        return "macOS";
+        return "macOS-Intel";
     #endif
 #elif defined(Q_OS_WIN)
-    return "Windows";
+    return "Windows-x64";
 #elif defined(Q_OS_LINUX)
-    return "Linux";
+    return "Linux-x64";
 #else
-    return "macOS";
+    return "macOS-AppleSilicon";
 #endif
 }
 
@@ -56,89 +56,156 @@ int UpdateManager::compareVersions(const QString &v1Raw, const QString &v2Raw) {
 }
 
 void UpdateManager::checkForUpdates(bool, std::function<void(const UpdateInfo &info, const QString &errorMsg)> callback) {
-    QString urlStr = QString("https://api.github.com/repos/%1/releases/latest").arg(GUYI_BOT_REPO);
-    QNetworkRequest request{QUrl(urlStr)};
-    request.setHeader(QNetworkRequest::UserAgentHeader, "guyi-bot-updater/" GUYI_BOT_VERSION);
-    request.setRawHeader("Accept", "application/vnd.github.v3+json");
+    // 方案一：优先通过 GitHub Releases Atom Feed 获取（公开 CDN 无 API 频率限制，绝不会报 403）
+    QString atomUrl = QString("https://github.com/%1/releases.atom").arg(GUYI_BOT_REPO);
+    QNetworkRequest request{QUrl(atomUrl)};
+    request.setHeader(QNetworkRequest::UserAgentHeader, "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko)");
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
 
-    std::cout << "[UpdateManager] 正在检查 GitHub 最新版本: " << urlStr.toStdString() << std::endl;
+    std::cout << "[UpdateManager] 正在获取 GitHub Releases Feed: " << atomUrl.toStdString() << std::endl;
 
     QNetworkReply *reply = m_networkManager->get(request);
     connect(reply, &QNetworkReply::finished, [this, reply, callback]() {
         reply->deleteLater();
 
-        if (reply->error() != QNetworkReply::NoError) {
-            QString err = QString("请求 GitHub 接口失败: %1").arg(reply->errorString());
-            std::cerr << "[UpdateManager] " << err.toStdString() << std::endl;
-            if (callback) callback(UpdateInfo{}, err);
-            return;
-        }
+        if (reply->error() == QNetworkReply::NoError) {
+            QString xmlContent = QString::fromUtf8(reply->readAll());
 
-        QByteArray data = reply->readAll();
-        QJsonParseError parseErr;
-        auto doc = QJsonDocument::fromJson(data, &parseErr);
-        if (parseErr.error != QJsonParseError::NoError || !doc.isObject()) {
-            QString err = "解析 GitHub Releases 响应失败";
-            if (callback) callback(UpdateInfo{}, err);
-            return;
-        }
+            // 提取第一个 entry (最新 Release)
+            QRegularExpression entryRe("<entry>(.*?)</entry>", QRegularExpression::DotMatchesEverythingOption);
+            auto entryMatch = entryRe.match(xmlContent);
+            if (entryMatch.hasMatch()) {
+                QString entryXml = entryMatch.captured(1);
 
-        auto rootObj = doc.object();
-        QString tagName = rootObj["tag_name"].toString().trimmed();
-        QString releaseTitle = rootObj["name"].toString().trimmed();
-        QString releaseBody = rootObj["body"].toString();
-        QString htmlUrl = rootObj["html_url"].toString();
+                // 提取 tag_name (例如 v1.1.0)
+                QRegularExpression tagRe("releases/tag/([^\"\\s>]+)");
+                auto tagMatch = tagRe.match(entryXml);
+                QString tagName = tagMatch.hasMatch() ? tagMatch.captured(1).trimmed() : "";
 
-        UpdateInfo info;
-        info.currentVersion = GUYI_BOT_VERSION;
-        info.remoteVersion = tagName;
-        info.releaseTitle = releaseTitle.isEmpty() ? tagName : releaseTitle;
-        info.releaseNotes = releaseBody;
-        info.htmlUrl = htmlUrl;
+                // 提取 release title
+                QRegularExpression titleRe("<title>(.*?)</title>");
+                auto titleMatch = titleRe.match(entryXml);
+                QString title = titleMatch.hasMatch() ? titleMatch.captured(1).trimmed() : tagName;
 
-        // 查找匹配当前操作系统架构的资产包
-        QString keyword = getPlatformAssetKeyword();
-        auto assetsArr = rootObj["assets"].toArray();
-        for (auto aVal : assetsArr) {
-            auto aObj = aVal.toObject();
-            QString name = aObj["name"].toString();
-            if (name.contains(keyword, Qt::CaseInsensitive) && name.endsWith(".zip", Qt::CaseInsensitive)) {
-                info.downloadUrl = aObj["browser_download_url"].toString();
-                info.assetName = name;
-                info.assetSize = aObj["size"].toInteger();
-                break;
+                // 提取 changelog content
+                QRegularExpression contentRe("<content type=\"html\">(.*?)</content>", QRegularExpression::DotMatchesEverythingOption);
+                auto contentMatch = contentRe.match(entryXml);
+                QString changelogHtml = contentMatch.hasMatch() ? contentMatch.captured(1) : "";
+                // 还原转义字符
+                changelogHtml.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&").replace("&quot;", "\"");
+
+                if (!tagName.isEmpty()) {
+                    UpdateInfo info;
+                    info.currentVersion = GUYI_BOT_VERSION;
+                    info.remoteVersion = tagName;
+                    info.releaseTitle = title;
+                    info.releaseNotes = changelogHtml;
+                    info.htmlUrl = QString("https://github.com/%1/releases/tag/%2").arg(GUYI_BOT_REPO, tagName);
+                    
+                    // 组装标准 Release 资产包下载地址
+                    QString platformKw = getPlatformAssetKeyword();
+                    info.downloadUrl = QString("https://github.com/%1/releases/download/%2/guyi-bot-%3.zip")
+                        .arg(GUYI_BOT_REPO, tagName, platformKw);
+                    info.assetName = QString("guyi-bot-%1.zip").arg(platformKw);
+
+                    if (compareVersions(tagName, GUYI_BOT_VERSION) > 0) {
+                        info.hasUpdate = true;
+                        std::cout << "[UpdateManager] (Feed) 发现新版本: " << tagName.toStdString()
+                                  << " (当前: " << GUYI_BOT_VERSION << ")" << std::endl;
+                    } else {
+                        info.hasUpdate = false;
+                        std::cout << "[UpdateManager] (Feed) 当前已是最新版本: " << GUYI_BOT_VERSION << std::endl;
+                    }
+
+                    m_latestInfo = info;
+                    if (callback) callback(info, "");
+                    return;
+                }
             }
         }
 
-        // 如果未找到平台精准匹配包，做兼容回退
-        if (info.downloadUrl.isEmpty() && !assetsArr.isEmpty()) {
+        // 备用方案：如果 Atom Feed 解析失败，回退到 GitHub Releases API
+        std::cout << "[UpdateManager] Feed 未命中，尝试回退到 API 检测..." << std::endl;
+        QString apiUrl = QString("https://api.github.com/repos/%1/releases/latest").arg(GUYI_BOT_REPO);
+        QNetworkRequest apiReq{QUrl(apiUrl)};
+        apiReq.setHeader(QNetworkRequest::UserAgentHeader, "Mozilla/5.0 guyi-bot/" GUYI_BOT_VERSION);
+        apiReq.setRawHeader("Accept", "application/vnd.github.v3+json");
+        apiReq.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+
+        QNetworkReply *apiReply = m_networkManager->get(apiReq);
+        connect(apiReply, &QNetworkReply::finished, [this, apiReply, callback]() {
+            apiReply->deleteLater();
+
+            if (apiReply->error() != QNetworkReply::NoError) {
+                QString err = QString("请求 GitHub 接口失败: %1").arg(apiReply->errorString());
+                std::cerr << "[UpdateManager] " << err.toStdString() << std::endl;
+                if (callback) callback(UpdateInfo{}, err);
+                return;
+            }
+
+            QByteArray data = apiReply->readAll();
+            QJsonParseError parseErr;
+            auto doc = QJsonDocument::fromJson(data, &parseErr);
+            if (parseErr.error != QJsonParseError::NoError || !doc.isObject()) {
+                QString err = "解析 GitHub Releases 响应失败";
+                if (callback) callback(UpdateInfo{}, err);
+                return;
+            }
+
+            auto rootObj = doc.object();
+            QString tagName = rootObj["tag_name"].toString().trimmed();
+            QString releaseTitle = rootObj["name"].toString().trimmed();
+            QString releaseBody = rootObj["body"].toString();
+            QString htmlUrl = rootObj["html_url"].toString();
+
+            UpdateInfo info;
+            info.currentVersion = GUYI_BOT_VERSION;
+            info.remoteVersion = tagName;
+            info.releaseTitle = releaseTitle.isEmpty() ? tagName : releaseTitle;
+            info.releaseNotes = releaseBody;
+            info.htmlUrl = htmlUrl;
+
+            // 查找匹配当前操作系统架构的资产包
+            QString keyword = getPlatformAssetKeyword();
+            auto assetsArr = rootObj["assets"].toArray();
             for (auto aVal : assetsArr) {
                 auto aObj = aVal.toObject();
                 QString name = aObj["name"].toString();
-                if (name.contains("macOS", Qt::CaseInsensitive) || name.endsWith(".zip", Qt::CaseInsensitive)) {
+                if (name.contains(keyword, Qt::CaseInsensitive) && name.endsWith(".zip", Qt::CaseInsensitive)) {
                     info.downloadUrl = aObj["browser_download_url"].toString();
                     info.assetName = name;
                     info.assetSize = aObj["size"].toInteger();
                     break;
                 }
             }
-        }
 
-        // 版本比对
-        if (compareVersions(tagName, GUYI_BOT_VERSION) > 0) {
-            info.hasUpdate = true;
-            std::cout << "[UpdateManager] 发现新版本: " << tagName.toStdString()
-                      << " (当前版本: " << GUYI_BOT_VERSION << ")" << std::endl;
-        } else {
-            info.hasUpdate = false;
-            std::cout << "[UpdateManager] 当前已是最新版本: " << GUYI_BOT_VERSION << std::endl;
-        }
+            if (info.downloadUrl.isEmpty() && !assetsArr.isEmpty()) {
+                for (auto aVal : assetsArr) {
+                    auto aObj = aVal.toObject();
+                    QString name = aObj["name"].toString();
+                    if (name.contains("macOS", Qt::CaseInsensitive) || name.endsWith(".zip", Qt::CaseInsensitive)) {
+                        info.downloadUrl = aObj["browser_download_url"].toString();
+                        info.assetName = name;
+                        info.assetSize = aObj["size"].toInteger();
+                        break;
+                    }
+                }
+            }
 
-        m_latestInfo = info;
-        if (callback) {
-            callback(info, "");
-        }
+            if (compareVersions(tagName, GUYI_BOT_VERSION) > 0) {
+                info.hasUpdate = true;
+                std::cout << "[UpdateManager] 发现新版本: " << tagName.toStdString()
+                          << " (当前版本: " << GUYI_BOT_VERSION << ")" << std::endl;
+            } else {
+                info.hasUpdate = false;
+                std::cout << "[UpdateManager] 当前已是最新版本: " << GUYI_BOT_VERSION << std::endl;
+            }
+
+            m_latestInfo = info;
+            if (callback) {
+                callback(info, "");
+            }
+        });
     });
 }
 
@@ -162,7 +229,7 @@ void UpdateManager::startDownloadAndInstall(const QString &downloadUrl,
     }
 
     QNetworkRequest request{QUrl(downloadUrl)};
-    request.setHeader(QNetworkRequest::UserAgentHeader, "guyi-bot-updater/" GUYI_BOT_VERSION);
+    request.setHeader(QNetworkRequest::UserAgentHeader, "Mozilla/5.0 guyi-bot/" GUYI_BOT_VERSION);
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
 
     std::cout << "[UpdateManager] 开始下载更新包: " << downloadUrl.toStdString() << std::endl;

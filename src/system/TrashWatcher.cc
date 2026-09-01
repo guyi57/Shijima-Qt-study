@@ -37,6 +37,8 @@ TrashWatcher* TrashWatcher::instance() {
 TrashWatcher::TrashWatcher() {
 #if defined(Q_OS_MAC)
     m_trashPath = QDir::homePath() + "/.Trash";
+#elif defined(Q_OS_WIN)
+    m_trashPath = "C:/$Recycle.Bin";
 #elif defined(Q_OS_LINUX)
     m_trashPath = QDir::homePath() + "/.local/share/Trash/files";
 #else

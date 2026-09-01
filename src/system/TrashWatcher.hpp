@@ -5,6 +5,7 @@
 #include <QSet>
 #include <QFileSystemWatcher>
 #include <QDateTime>
+#include <QTimer>
 
 class TrashWatcher : public QObject {
 public:
@@ -19,11 +20,13 @@ private:
     ~TrashWatcher() override = default;
 
     void onDirectoryChanged(const QString &path);
+    void checkForNewTrashFiles();
     void updateSnapshot();
 
     bool m_enabled = true;
     QString m_trashPath;
     QFileSystemWatcher *m_watcher = nullptr;
+    QTimer *m_pollTimer = nullptr;
     QSet<QString> m_knownFiles;
     qint64 m_lastTriggerTime = 0;
 };

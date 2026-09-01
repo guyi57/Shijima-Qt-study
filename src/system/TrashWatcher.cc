@@ -31,10 +31,14 @@ void TrashWatcher::init() {
 
     m_watcher = new QFileSystemWatcher(this);
     m_watcher->addPath(m_trashPath);
-
     connect(m_watcher, &QFileSystemWatcher::directoryChanged, this, &TrashWatcher::onDirectoryChanged);
 
-    std::cout << "[TrashWatcher] 已启动回收站监听: " << m_trashPath.toStdString()
+    // 针对 macOS 特殊权限 ACL 机制，辅以 600ms 轻量级轮询扫描，确保 100% 捕获 Finder 删除事件
+    m_pollTimer = new QTimer(this);
+    connect(m_pollTimer, &QTimer::timeout, this, &TrashWatcher::checkForNewTrashFiles);
+    m_pollTimer->start(600);
+
+    std::cout << "[TrashWatcher] 已启动回收站双模监听(kqueue+poll): " << m_trashPath.toStdString()
               << " (初始文件数: " << m_knownFiles.size() << ")" << std::endl;
 }
 
@@ -54,6 +58,10 @@ void TrashWatcher::updateSnapshot() {
 }
 
 void TrashWatcher::onDirectoryChanged(const QString &) {
+    checkForNewTrashFiles();
+}
+
+void TrashWatcher::checkForNewTrashFiles() {
     if (!m_enabled) return;
 
     QDir trashDir(m_trashPath);
@@ -72,8 +80,8 @@ void TrashWatcher::onDirectoryChanged(const QString &) {
     if (newFiles.isEmpty()) return;
 
     qint64 now = QDateTime::currentMSecsSinceEpoch();
-    if (now - m_lastTriggerTime < 2500) {
-        // 2.5秒内防抖（防止批量删除多个文件触发多次）
+    if (now - m_lastTriggerTime < 2000) {
+        // 2.0秒内防抖（防止批量删除多个文件触发多次）
         return;
     }
     m_lastTriggerTime = now;
@@ -82,12 +90,11 @@ void TrashWatcher::onDirectoryChanged(const QString &) {
     std::cout << "[TrashWatcher] 监听到真实文件被删除移入废纸篓: "
               << latestDeletedFile.toStdString() << std::endl;
 
-    // 寻找当前屏幕上的主桌宠并触发搬运与丢弃动画
-    auto manager = ShijimaManager::defaultManager();
-    if (!manager) return;
-
-    manager->onTickSync([latestDeletedFile](ShijimaManager *mgr) {
-        auto &mascots = mgr->mascots();
+    // 确保在 Qt GUI 主线程上触发黑洞吞噬与爬行推文件动画
+    QTimer::singleShot(0, [latestDeletedFile]() {
+        auto manager = ShijimaManager::defaultManager();
+        if (!manager) return;
+        auto &mascots = manager->mascots();
         if (!mascots.empty() && !FileDisposalSequence::instance()->isRunning()) {
             FileDisposalSequence::instance()->start(mascots.front(), latestDeletedFile);
         }

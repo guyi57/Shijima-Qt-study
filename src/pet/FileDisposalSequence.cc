@@ -8,6 +8,8 @@
 #include <cmath>
 #include <iostream>
 
+#include <QFile>
+
 FileDisposalSequence* FileDisposalSequence::instance() {
     static FileDisposalSequence s_instance;
     return &s_instance;
@@ -24,11 +26,12 @@ FileDisposalSequence::~FileDisposalSequence() {
     }
 }
 
-void FileDisposalSequence::start(ShijimaWidget *pet, const QString &fileName) {
+void FileDisposalSequence::start(ShijimaWidget *pet, const QString &fileName, const QString &realFilePath) {
     if (!pet || m_running) return;
 
     m_pet = pet;
     m_fileName = fileName.isEmpty() ? "cache_trash.tmp" : fileName;
+    m_realFilePath = realFilePath;
     m_running = true;
     m_stage = 0;
     m_stageTickCount = 0;
@@ -151,6 +154,9 @@ void FileDisposalSequence::step() {
                 m_fileWidget->tossTo(m_blackHolePos, [this]() {
                     if (m_trashWidget) {
                         m_trashWidget->playAbsorbEffect();
+                    }
+                    if (!m_realFilePath.isEmpty() && QFile::exists(m_realFilePath)) {
+                        QFile::moveToTrash(m_realFilePath);
                     }
                     m_fileWidget = nullptr;
                 });

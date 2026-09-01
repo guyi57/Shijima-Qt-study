@@ -14,7 +14,7 @@ public:
     static FileDisposalSequence* instance();
 
     // 启动搬运并删除文件动画序列
-    void start(ShijimaWidget *pet, const QString &fileName = "garbage.tmp");
+    void start(ShijimaWidget *pet, const QString &fileName = "garbage.tmp", const QString &realFilePath = "");
 
     bool isRunning() const { return m_running; }
 
@@ -30,6 +30,7 @@ private:
     FloatingFileWidget *m_fileWidget = nullptr;
     TrashTargetWidget *m_trashWidget = nullptr;
     QString m_fileName;
+    QString m_realFilePath;
 
     int m_stage = 0; // 0: align, 1: crawl push, 2: black hole swallow, 3: celebrate
     int m_stageTickCount = 0;

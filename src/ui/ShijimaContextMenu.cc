@@ -25,6 +25,9 @@
 #include "UpdateManager.hpp"
 #include "UpdateDialog.hpp"
 #include <QMessageBox>
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QDir>
 #include <QMap>
 
 // 行为名称中文翻译映射表
@@ -205,10 +208,19 @@ ShijimaContextMenu::ShijimaContextMenu(ShijimaWidget *parent)
         MusicPlayerDialog::instance()->toggleVisibility();
     });
 
-    // File Disposal Animation Demo
-    action = addAction("🗑️ 模拟搬运删除文件");
+    // File Disposal by Black Hole
+    action = addAction("🕳️ 黑洞吞噬本地文件...");
     connect(action, &QAction::triggered, [this](){
-        FileDisposalSequence::instance()->start(shijimaParent(), "cache_log.tmp");
+        QString filePath = QFileDialog::getOpenFileName(
+            nullptr,
+            "选择要让桌宠推入黑洞吞噬的文件",
+            QDir::homePath() + "/Desktop",
+            "所有文件 (*.*)"
+        );
+        if (!filePath.isEmpty()) {
+            QFileInfo fi(filePath);
+            FileDisposalSequence::instance()->start(shijimaParent(), fi.fileName(), filePath);
+        }
     });
 
     // AI Settings Dialog

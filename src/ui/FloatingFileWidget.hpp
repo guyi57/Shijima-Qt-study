@@ -4,7 +4,7 @@
 #include <QString>
 #include <QPointF>
 #include <QTimer>
-#include <QPropertyAnimation>
+#include <functional>
 
 class FloatingFileWidget : public QWidget {
 public:
@@ -12,7 +12,7 @@ public:
     ~FloatingFileWidget() override = default;
 
     void spawnAt(const QPointF &pos);
-    void attachTo(const QPointF &petPos, bool facingRight);
+    void attachToScreen(const QPointF &handPos);
     void tossTo(const QPointF &targetTrashPos, std::function<void()> onFinished = nullptr);
 
 protected:

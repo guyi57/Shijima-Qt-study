@@ -34,30 +34,33 @@ void FileDisposalSequence::start(ShijimaWidget *pet, const QString &fileName) {
     m_stageTickCount = 0;
 
     auto screen = QGuiApplication::primaryScreen();
-    // 使用完整屏幕尺寸定位右下角真实废纸篓
     QRect screenGeom = screen ? screen->geometry() : QRect(0, 0, 1920, 1080);
 
-    // 屏幕右下角废纸篓真实像素位置
-    m_trashPos = QPointF(screenGeom.right() - 55, screenGeom.bottom() - 40);
+    // 屏幕右下角废纸篓真实像素位置 (高于屏幕底边 65px，避开 Dock 底栏)
+    m_trashPos = QPointF(screenGeom.right() - 65, screenGeom.bottom() - 65);
 
-    // 确定文件刷新位置
-    double currentX = pet->mascot().state->anchor.x;
-    double fileX = currentX - 220;
-    if (fileX < screenGeom.left() + 80) {
-        fileX = currentX + 220;
+    // 确定文件生成位置：优先在桌宠身旁一段距离生成
+    int petScreenX = pet->x();
+    int petScreenY = pet->y();
+    double fileX = petScreenX - 220;
+    if (fileX < screenGeom.left() + 100) {
+        fileX = petScreenX + 220;
     }
     if (fileX > m_trashPos.x() - 180) {
-        fileX = m_trashPos.x() - 260;
+        fileX = m_trashPos.x() - 240;
     }
-    double fileY = screenGeom.bottom() - 25;
+    double fileY = petScreenY + pet->height() / 2;
+    if (fileY > screenGeom.bottom() - 80) {
+        fileY = screenGeom.bottom() - 80;
+    }
 
     m_fileSpawnPos = QPointF(fileX, fileY);
 
-    // 创建浮动文件挂件
+    // 1. 创建并高亮显示浮动文件挂件
     m_fileWidget = new FloatingFileWidget(m_fileName);
     m_fileWidget->spawnAt(m_fileSpawnPos);
 
-    // 在右下角废纸篓位置点亮发光提示目标
+    // 2. 在右下角废纸篓位置点亮发光提示目标
     m_trashWidget = new TrashTargetWidget();
     m_trashWidget->showAt(m_trashPos);
 
@@ -78,19 +81,21 @@ void FileDisposalSequence::step() {
     auto state = m_pet->mascot().state;
     m_stageTickCount++;
 
+    // 实时计算桌宠真实屏幕坐标
+    int petCurX = m_pet->x();
+
     // =========================================================================
     // 阶段 0: 跑向文件 (Dash / Walk to file)
     // =========================================================================
     if (m_stage == 0) {
-        double diffX = m_fileSpawnPos.x() - state->anchor.x;
+        double diffX = m_fileSpawnPos.x() - (petCurX + m_pet->width() / 2);
         bool movingRight = (diffX > 0);
         state->looking_right = movingRight;
 
-        if (std::abs(diffX) > 20.0) {
+        if (std::abs(diffX) > 25.0) {
             m_pet->trySetBehavior("WalkAlongWorkAreaFloor");
             double stepSpeed = 6.0;
             state->anchor.x += (movingRight ? stepSpeed : -stepSpeed);
-            state->anchor.y = m_fileSpawnPos.y();
         } else {
             // 到达文件旁，进入阶段 1 (拾取/俯身抓稳)
             m_stage = 1;
@@ -113,9 +118,9 @@ void FileDisposalSequence::step() {
     // 阶段 2: 搬运/推向垃圾桶 (Push / Walk straight to Trash position)
     // =========================================================================
     else if (m_stage == 2) {
-        // 桌宠目标坐标是垃圾桶左侧 60px，这样它推在身前的文件恰好贴在垃圾桶上
-        double targetPetX = m_trashPos.x() - 60.0;
-        double diffX = targetPetX - state->anchor.x;
+        // 桌宠目标坐标是垃圾桶左侧 70px
+        double targetPetScreenX = m_trashPos.x() - 70.0;
+        double diffX = targetPetScreenX - petCurX;
         bool movingRight = (diffX > 0);
         state->looking_right = movingRight;
 
@@ -123,13 +128,14 @@ void FileDisposalSequence::step() {
             m_pet->trySetBehavior("WalkAlongWorkAreaFloor");
         }
 
-        double pushSpeed = 4.8;
+        double pushSpeed = 5.0;
         state->anchor.x += (movingRight ? pushSpeed : -pushSpeed);
-        state->anchor.y = m_trashPos.y();
 
-        // 逐帧精确将文件图标绑定在身前接触点
+        // 逐帧精确将文件图标绑定在身前手部屏幕坐标
         if (m_fileWidget) {
-            m_fileWidget->attachTo(QPointF(state->anchor.x, state->anchor.y), movingRight);
+            int handX = movingRight ? (m_pet->x() + m_pet->width() - 15) : (m_pet->x() - 55);
+            int handY = m_pet->y() + (m_pet->height() / 2) - 15;
+            m_fileWidget->attachToScreen(QPointF(handX, handY));
         }
 
         // 一路走到垃圾桶跟前

@@ -1,15 +1,22 @@
 #include "TrashTargetWidget.hpp"
+#include "Platform/Platform.hpp"
 #include <QPainter>
 #include <QPainterPath>
 #include <cmath>
 
 TrashTargetWidget::TrashTargetWidget(QWidget *parent)
-    : QWidget(parent, Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::Tool | Qt::NoDropShadowWindowHint)
+    : QWidget(parent)
 {
     setAttribute(Qt::WA_TranslucentBackground);
+    setAttribute(Qt::WA_NoSystemBackground);
+    setAttribute(Qt::WA_ShowWithoutActivating);
     setAttribute(Qt::WA_TransparentForMouseEvents);
     setAttribute(Qt::WA_DeleteOnClose);
-    resize(100, 100);
+    setFocusPolicy(Qt::NoFocus);
+    setWindowFlags(Qt::ToolTip | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::WindowDoesNotAcceptFocus);
+
+    Platform::setupFloatingBubbleWindow(this);
+    resize(110, 110);
 }
 
 void TrashTargetWidget::showAt(const QPointF &pos) {
@@ -18,6 +25,7 @@ void TrashTargetWidget::showAt(const QPointF &pos) {
     m_scale = 0.8;
     m_absorbing = false;
     show();
+    raise();
 
     if (m_animTimer) {
         m_animTimer->stop();
@@ -52,7 +60,8 @@ void TrashTargetWidget::showAt(const QPointF &pos) {
 void TrashTargetWidget::playAbsorbEffect() {
     m_absorbing = true;
     m_absorbProgress = 0.0;
-    m_scale = 1.25; // 吞入瞬间放大
+    m_scale = 1.3; // 吞入瞬间放大
+    update();
 }
 
 void TrashTargetWidget::dismiss() {
@@ -68,11 +77,12 @@ void TrashTargetWidget::paintEvent(QPaintEvent *) {
     painter.save();
     painter.translate(width() / 2.0, height() / 2.0);
     painter.scale(m_scale, m_scale);
+    painter.rotate(0);
     painter.translate(-width() / 2.0, -height() / 2.0);
     painter.setOpacity(m_opacity);
 
-    int w = 76;
-    int h = 76;
+    int w = 84;
+    int h = 84;
     int x = (width() - w) / 2;
     int y = (height() - h) / 2;
 
@@ -80,8 +90,8 @@ void TrashTargetWidget::paintEvent(QPaintEvent *) {
 
     // 发光外圈底晕
     QRadialGradient glow(boxRect.center(), w / 2.0);
-    glow.setColorAt(0.0, QColor(255, 107, 107, 180));
-    glow.setColorAt(0.7, QColor(255, 138, 138, 90));
+    glow.setColorAt(0.0, QColor(255, 107, 107, 200));
+    glow.setColorAt(0.7, QColor(255, 138, 138, 100));
     glow.setColorAt(1.0, QColor(255, 255, 255, 0));
     painter.setBrush(glow);
     painter.setPen(Qt::NoPen);
@@ -90,19 +100,19 @@ void TrashTargetWidget::paintEvent(QPaintEvent *) {
     // 核心玻璃质感圆形卡片
     QRectF cardRect = boxRect.adjusted(8, 8, -8, -8);
     QLinearGradient cardGrad(cardRect.topLeft(), cardRect.bottomRight());
-    cardGrad.setColorAt(0.0, QColor(255, 255, 255, 240));
-    cardGrad.setColorAt(1.0, QColor(250, 230, 230, 220));
+    cardGrad.setColorAt(0.0, QColor(255, 255, 255, 245));
+    cardGrad.setColorAt(1.0, QColor(255, 235, 235, 230));
     painter.setBrush(cardGrad);
-    painter.setPen(QPen(QColor(255, 120, 120, 200), 1.8));
-    painter.drawRoundedRect(cardRect, 14, 14);
+    painter.setPen(QPen(QColor(255, 110, 110, 220), 2.0));
+    painter.drawRoundedRect(cardRect, 16, 16);
 
     // 垃圾桶 Emoji 与提示
-    painter.setFont(QFont("-apple-system", m_absorbing ? 22 : 19));
-    painter.drawText(QRectF(cardRect.x(), cardRect.y() + 4, cardRect.width(), 30), Qt::AlignCenter, m_absorbing ? "🪣" : "🗑️");
+    painter.setFont(QFont("-apple-system", m_absorbing ? 24 : 20));
+    painter.drawText(QRectF(cardRect.x(), cardRect.y() + 6, cardRect.width(), 32), Qt::AlignCenter, m_absorbing ? "🪣" : "🗑️");
 
-    painter.setFont(QFont("-apple-system", 8, QFont::Bold));
-    painter.setPen(QColor(230, 70, 70));
-    painter.drawText(QRectF(cardRect.x(), cardRect.y() + 36, cardRect.width(), 16), Qt::AlignCenter, m_absorbing ? "已清除✨" : "系统废纸篓");
+    painter.setFont(QFont("-apple-system", 9, QFont::Bold));
+    painter.setPen(QColor(220, 50, 50));
+    painter.drawText(QRectF(cardRect.x(), cardRect.y() + 40, cardRect.width(), 18), Qt::AlignCenter, m_absorbing ? "已清除✨" : "系统废纸篓");
 
     painter.restore();
 }

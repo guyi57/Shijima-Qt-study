@@ -34,15 +34,32 @@
 static QJsonObject getMusicToolDefinition() {
     QJsonObject fn;
     fn["name"] = "music_player_manage";
-    fn["description"] = "控制音乐播放器播放音乐、暂停、切歌、搜索歌曲、收藏/取消收藏、查看收藏列表、获取当前曲目，或批量推荐歌曲并加入播放列表。当用户要求放歌、听音乐、搜歌、推荐歌单（如民谣、抖音热歌等）、批量加歌到播放列表、暂停、下一首、上一首、收藏歌曲时调用此工具。";
+    fn["description"] = "控制音乐播放器播放音乐、暂停、切歌、搜索歌曲、收藏/取消收藏、查看收藏列表、获取当前曲目，或按模式智能推荐歌曲（熟悉/探索/随机模式）、管理用户的喜好标签与推荐模式。当用户要求放歌、推荐音乐、切换推荐模式、查看/修改/删除喜好标签时调用此工具。";
 
     QJsonObject props;
     
     QJsonObject actionProp;
     actionProp["type"] = "string";
-    actionProp["enum"] = QJsonArray{"search_and_play", "batch_search_and_add", "pause", "resume", "toggle_play", "next", "previous", "favorite", "list_favorites", "get_current", "open_window"};
-    actionProp["description"] = "操作类型: batch_search_and_add(批量推荐/搜歌并加入播放列表), search_and_play(搜索单曲并播放), pause(暂停), resume(继续播放), toggle_play(播放/暂停切换), next(下一首), previous(上一首), favorite(收藏/取消收藏当前歌曲), list_favorites(查看收藏列表), get_current(获取当前播放歌曲), open_window(打开音乐播放器窗口)";
+    actionProp["enum"] = QJsonArray{
+        "recommend_by_mode", "list_preference_tags", "add_preference_tag", "remove_preference_tag", "set_recommend_mode",
+        "search_and_play", "batch_search_and_add", "pause", "resume", "toggle_play", "next", "previous", "favorite", "list_favorites", "get_current", "open_window"
+    };
+    actionProp["description"] = "操作类型: recommend_by_mode(按模式推荐6首歌并入库开播), list_preference_tags(查看喜好标签与推荐模式), add_preference_tag(添加喜好标签), remove_preference_tag(删除喜好标签), set_recommend_mode(设置默认推荐模式: familiar/explore/random), batch_search_and_add(批量推荐/搜歌并加入播放列表), search_and_play(搜索单曲并播放), pause(暂停), resume(继续播放), toggle_play(播放/暂停切换), next(下一首), previous(上一首), favorite(收藏/取消收藏当前歌曲), list_favorites(查看收藏列表), get_current(获取当前播放歌曲), open_window(打开音乐播放器窗口)";
     props["action"] = actionProp;
+
+    QJsonObject modeProp;
+    modeProp["type"] = "string";
+    modeProp["enum"] = QJsonArray{"familiar", "explore", "random", "default"};
+    modeProp["description"] = "若为 recommend_by_mode 或 set_recommend_mode，推荐模式: familiar(熟悉模式:从收藏+喜好偏好推荐6首), explore(探索模式:全网最新爆款热歌6首), random(随机模式:从喜好标签随机组合推荐6首)";
+    props["mode"] = modeProp;
+
+    QJsonObject tagsProp;
+    tagsProp["type"] = "array";
+    QJsonObject tagItem;
+    tagItem["type"] = "string";
+    tagsProp["items"] = tagItem;
+    tagsProp["description"] = "若为 add_preference_tag 或 remove_preference_tag，要添加或删除的喜好标签列表（如 [\"摇滚\", \"民谣\", \"周杰伦\"]）";
+    props["tags"] = tagsProp;
 
     QJsonObject keywordProp;
     keywordProp["type"] = "string";
@@ -59,7 +76,7 @@ static QJsonObject getMusicToolDefinition() {
 
     QJsonObject playNowProp;
     playNowProp["type"] = "boolean";
-    playNowProp["description"] = "若为 batch_search_and_add，添加完成后是否立即开始播放第一首（默认为 true）";
+    playNowProp["description"] = "添加或推荐完成后是否立即开始播放第一首（默认为 true）";
     props["play_now"] = playNowProp;
 
     QJsonObject sourceProp;
@@ -84,6 +101,140 @@ static QJsonObject getMusicToolDefinition() {
 static void executeMusicTool(const QJsonObject &args, std::function<void(QString)> callback) {
     QString action = args["action"].toString().trimmed();
     std::cout << "[MusicTool] 执行音乐指令: action=" << action.toStdString() << std::endl;
+
+    if (action == "recommend_by_mode") {
+        QString mode = args.contains("mode") ? args["mode"].toString("default") : "default";
+        bool playNow = args.contains("play_now") ? args["play_now"].toBool(true) : true;
+
+        QString effectiveMode = (mode == "default" || mode.isEmpty()) ? MusicFavoriteDb::instance()->getRecommendationMode() : mode;
+        QString modeName = (effectiveMode == "explore") ? "🚀 探索模式 (全网热点爆款)" : (effectiveMode == "random" ? "🎲 随机模式 (喜好标签组合)" : "💖 熟悉模式 (收藏池与喜好衍生)");
+
+        MusicPlayerManager::instance()->recommendSongsByMode(effectiveMode, 6, [callback, playNow, modeName](const QVector<SongInfo> &songs) {
+            if (songs.isEmpty()) {
+                if (callback) callback("⚠️ 本次推荐未能匹配到合适歌曲，请尝试切换推荐模式或添加喜好标签哦～");
+                return;
+            }
+
+            int added = MusicPlayerManager::instance()->addBatchToPlaylist(songs);
+            if (playNow && !songs.isEmpty()) {
+                MusicPlayerManager::instance()->playSong(songs.first());
+            }
+
+            QString res = QString("🎶 **已按【%1】为您精选并添加 %2 首歌曲！**\n\n"
+                                  "| 序号 | 🎶 歌曲名 | 🎤 歌手 | 🌐 音乐源 |\n"
+                                  "| :---: | :--- | :--- | :--- |\n").arg(modeName).arg(added);
+
+            for (int i = 0; i < songs.size(); ++i) {
+                const auto &s = songs[i];
+                res += QString("| %1 | **%2** | %3 | %4 |\n")
+                    .arg(i + 1)
+                    .arg(s.name, s.artist.isEmpty() ? "未知歌手" : s.artist, MusicApiService::sourceDisplayName(s.source));
+            }
+
+            if (playNow && !songs.isEmpty()) {
+                res += QString("\n▶️ **正在播放：** 《%1》 - %2 🎶").arg(songs.first().name, songs.first().artist);
+            }
+            res += "\n💡 *去重机制已生效，近期推荐历史中的曲目不会重复出现。*";
+
+            if (callback) callback(res);
+        });
+        return;
+    }
+    else if (action == "list_preference_tags") {
+        QStringList tags = MusicFavoriteDb::instance()->getPreferenceTags();
+        QString mode = MusicFavoriteDb::instance()->getRecommendationMode();
+        QString modeDesc = (mode == "explore") ? "🚀 探索模式 (全网最新热点爆款)" : (mode == "random" ? "🎲 随机模式 (喜好标签随机抽取)" : "💖 熟悉模式 (收藏歌曲与偏好衍生)");
+        int favCount = MusicFavoriteDb::instance()->getFavoriteCount();
+
+        QString res = QString("🏷️ **我的音乐喜好画像**\n\n"
+                              "- 🎯 **当前推荐模式**：%1\n"
+                              "- ❤️ **已收藏歌曲**：%2 首\n"
+                              "- 🔖 **个性化喜好标签** (%3 个)：\n\n").arg(modeDesc).arg(favCount).arg(tags.size());
+
+        if (tags.isEmpty()) {
+            res += "*(暂未添加标签，可对我说「添加喜好标签：摇滚、民谣、周杰伦」)*\n";
+        } else {
+            for (int i = 0; i < tags.size(); ++i) {
+                res += QString("%1. `%2`\n").arg(i + 1).arg(tags[i]);
+            }
+        }
+        res += "\n💬 **对话指令提示**：\n"
+               "- ➕ 对我说「添加喜好标签：xxx」添加标签\n"
+               "- ➖ 对我说「删除喜好标签：xxx」移除标签\n"
+               "- 🔄 对我说「切换到探索模式/熟悉模式/随机模式」切换模式\n"
+               "- 🎶 对我说「推荐点音乐」立即按当前模式开播 6 首歌！";
+
+        if (callback) callback(res);
+        return;
+    }
+    else if (action == "add_preference_tag") {
+        QStringList toAdd;
+        if (args.contains("tags") && args["tags"].isArray()) {
+            for (auto v : args["tags"].toArray()) {
+                QString t = v.toString().trimmed();
+                if (!t.isEmpty()) toAdd.append(t);
+            }
+        }
+        if (args.contains("tag")) {
+            QString t = args["tag"].toString().trimmed();
+            if (!t.isEmpty() && !toAdd.contains(t)) toAdd.append(t);
+        }
+        if (toAdd.isEmpty()) {
+            if (callback) callback("⚠️ 请提供要添加的喜好标签名称哦～");
+            return;
+        }
+
+        for (const auto &t : toAdd) {
+            MusicFavoriteDb::instance()->addPreferenceTag(t);
+        }
+        QStringList allTags = MusicFavoriteDb::instance()->getPreferenceTags();
+        QString res = QString("✅ **已成功添加喜好标签：** `%1`\n\n🏷️ **当前全部喜好标签** (%2 个)：\n%3")
+            .arg(toAdd.join("`、`"))
+            .arg(allTags.size())
+            .arg(allTags.join("、"));
+        if (callback) callback(res);
+        return;
+    }
+    else if (action == "remove_preference_tag") {
+        QStringList toRemove;
+        if (args.contains("tags") && args["tags"].isArray()) {
+            for (auto v : args["tags"].toArray()) {
+                QString t = v.toString().trimmed();
+                if (!t.isEmpty()) toRemove.append(t);
+            }
+        }
+        if (args.contains("tag")) {
+            QString t = args["tag"].toString().trimmed();
+            if (!t.isEmpty() && !toRemove.contains(t)) toRemove.append(t);
+        }
+        if (toRemove.isEmpty()) {
+            if (callback) callback("⚠️ 请提供要删除的喜好标签名称哦～");
+            return;
+        }
+
+        for (const auto &t : toRemove) {
+            MusicFavoriteDb::instance()->removePreferenceTag(t);
+        }
+        QStringList allTags = MusicFavoriteDb::instance()->getPreferenceTags();
+        QString res = QString("🗑️ **已移除喜好标签：** `%1`\n\n🏷️ **剩余喜好标签** (%2 个)：\n%3")
+            .arg(toRemove.join("`、`"))
+            .arg(allTags.size())
+            .arg(allTags.isEmpty() ? "*(无)*" : allTags.join("、"));
+        if (callback) callback(res);
+        return;
+    }
+    else if (action == "set_recommend_mode") {
+        QString mode = args["mode"].toString().trimmed().toLower();
+        if (mode != "familiar" && mode != "explore" && mode != "random") {
+            mode = "familiar";
+        }
+        MusicFavoriteDb::instance()->setRecommendationMode(mode);
+        QString modeDesc = (mode == "explore") ? "🚀 探索模式 (全网实时爆款新歌)" : (mode == "random" ? "🎲 随机模式 (从喜好标签中随机抽取推荐)" : "💖 熟悉模式 (从收藏池与偏好歌手衍生推荐)");
+
+        QString res = QString("🎯 **已为您将默认推荐模式切换为：**\n\n**%1**\n\n💡 对我说「推荐音乐」即可立即按此模式为您精选 6 首新鲜好歌！").arg(modeDesc);
+        if (callback) callback(res);
+        return;
+    }
 
     if (action == "batch_search_and_add") {
         auto kwArray = args["keywords"].toArray();
@@ -822,12 +973,20 @@ void AgentService::ask(QString const& contextText,
         "%1\n\n"
         "【当前本地真实系统时间】: %2。\n"
         "你拥有管理本地系统定时器工具（timer_manage）、音乐播放器工具（music_player_manage）与网络热点搜索工具（web_search）。\n"
-        "【工具链与多步 Agent 协同指南】\n"
-        "1. 当用户要求推荐某类音乐、抖音最近热门民谣/热歌、特定风格歌单时：\n"
-        "   - 若需要实时互联网热点，可先调用 web_search 搜索榜单热歌；\n"
-        "   - 得到歌名后，调用 music_player_manage (action='batch_search_and_add', keywords=['歌名1 歌手', '歌名2', ...], play_now=true) 将歌曲批量加入播放列表！\n"
-        "2. 搜索单曲并播放: action='search_and_play', keyword='歌名或歌手'\n"
-        "3. 播放控制: action='pause'(暂停), 'resume'(继续), 'next'(下一首), 'previous'(上一首), 'list_favorites'(查看收藏)\n\n"
+        "【音乐播放器与喜好推荐工具指南】\n"
+        "1. 智能按模式推荐歌曲 (每次6首): action='recommend_by_mode', mode='familiar'|'explore'|'random'|'default', play_now=true\n"
+        "   - 'familiar' (熟悉模式): 从用户收藏池 + 喜好偏好衍生推荐 6 首；\n"
+        "   - 'explore' (探索模式): 推荐当前全网最新最火爆的热点流行歌曲 6 首；\n"
+        "   - 'random' (随机模式): 按照用户的喜好标签（如周杰伦、民谣、摇滚等）随机组合推荐 6 首；\n"
+        "   - 系统内置了近期推荐去重机制，连续推荐不会重复拉取相同歌曲。\n"
+        "2. 查看与管理喜好标签/推荐模式:\n"
+        "   - 查看喜好标签与模式: action='list_preference_tags'\n"
+        "   - 添加喜好标签: action='add_preference_tag', tags=['摇滚', '民谣']\n"
+        "   - 删除喜好标签: action='remove_preference_tag', tags=['古风']\n"
+        "   - 切换推荐模式: action='set_recommend_mode', mode='familiar'|'explore'|'random'\n"
+        "3. 互联网搜索并批量加歌:\n"
+        "   - 若用户要求推荐特定风格（如抖音热歌），可先调用 web_search 检索歌名，再调用 batch_search_and_add 批量入库！\n"
+        "4. 单曲搜索与播放控制: search_and_play, pause, resume, next, previous, favorite, list_favorites\n\n"
         "【定时器功能支持灵活组合】\n"
         "1. 单次倒计时/定时刻: repeat='once', trigger_in_seconds 或 target_time='2026-08-24 15:00'\n"
         "2. 每天固定时刻: repeat='daily', daily_time='09:00', 可配合 days_of_week 指定任意星期\n"

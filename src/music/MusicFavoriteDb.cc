@@ -75,6 +75,22 @@ bool MusicFavoriteDb::initDb()
         "CREATE TABLE IF NOT EXISTS search_history ("
         "  keyword TEXT PRIMARY KEY,"
         "  searched_at INTEGER"
+        ");"
+        "CREATE TABLE IF NOT EXISTS music_preference_tags ("
+        "  tag TEXT PRIMARY KEY,"
+        "  created_at INTEGER"
+        ");"
+        "CREATE TABLE IF NOT EXISTS music_recommendation_settings ("
+        "  key TEXT PRIMARY KEY,"
+        "  value TEXT"
+        ");"
+        "CREATE TABLE IF NOT EXISTS music_recent_recommendations ("
+        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "  track_id TEXT,"
+        "  source TEXT,"
+        "  name TEXT NOT NULL,"
+        "  artist TEXT,"
+        "  recommended_at INTEGER"
         ");";
 
     char *errMsg = nullptr;
@@ -83,6 +99,22 @@ bool MusicFavoriteDb::initDb()
         std::cerr << "[MusicDB] 初始化表结构失败: " << (errMsg ? errMsg : "") << std::endl;
         if (errMsg) sqlite3_free(errMsg);
         return false;
+    }
+
+    // 若喜好标签为空，注入初始默认推荐标签
+    const char *checkTagsSql = "SELECT COUNT(*) FROM music_preference_tags;";
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(db, checkTagsSql, -1, &stmt, nullptr) == SQLITE_OK) {
+        if (sqlite3_step(stmt) == SQLITE_ROW && sqlite3_column_int(stmt, 0) == 0) {
+            sqlite3_finalize(stmt);
+            stmt = nullptr;
+            const char *initTagsSql = 
+                "INSERT OR IGNORE INTO music_preference_tags (tag, created_at) VALUES "
+                "('流行', 1), ('民谣', 2), ('轻音乐', 3), ('治愈', 4), ('周杰伦', 5);";
+            sqlite3_exec(db, initTagsSql, nullptr, nullptr, nullptr);
+        } else if (stmt) {
+            sqlite3_finalize(stmt);
+        }
     }
 
     std::cout << "[MusicDB] 音乐收藏数据库初始化成功: " << m_dbPath.toStdString() << std::endl;
@@ -379,4 +411,238 @@ void MusicFavoriteDb::removeSearchHistory(const QString &keyword)
     sqlite3_bind_text(stmt, 1, kw.toUtf8().constData(), -1, SQLITE_TRANSIENT);
     sqlite3_step(stmt);
     sqlite3_finalize(stmt);
+}
+
+QStringList MusicFavoriteDb::getPreferenceTags()
+{
+    QStringList tags;
+    if (!m_sqliteHandle) initDb();
+    sqlite3 *db = static_cast<sqlite3*>(m_sqliteHandle);
+    if (!db) return tags;
+
+    const char *sql = "SELECT tag FROM music_preference_tags ORDER BY created_at ASC;";
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        return tags;
+    }
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        const char *txt = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+        if (txt) {
+            tags.append(QString::fromUtf8(txt));
+        }
+    }
+    sqlite3_finalize(stmt);
+    return tags;
+}
+
+bool MusicFavoriteDb::addPreferenceTag(const QString &tag)
+{
+    QString t = tag.trimmed();
+    if (t.isEmpty()) return false;
+
+    if (!m_sqliteHandle) initDb();
+    sqlite3 *db = static_cast<sqlite3*>(m_sqliteHandle);
+    if (!db) return false;
+
+    const char *sql = "INSERT OR IGNORE INTO music_preference_tags (tag, created_at) VALUES (?, ?);";
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        return false;
+    }
+
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
+    sqlite3_bind_text(stmt, 1, t.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(stmt, 2, now);
+
+    int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    return (rc == SQLITE_DONE);
+}
+
+bool MusicFavoriteDb::removePreferenceTag(const QString &tag)
+{
+    QString t = tag.trimmed();
+    if (t.isEmpty()) return false;
+
+    if (!m_sqliteHandle) initDb();
+    sqlite3 *db = static_cast<sqlite3*>(m_sqliteHandle);
+    if (!db) return false;
+
+    const char *sql = "DELETE FROM music_preference_tags WHERE tag = ?;";
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        return false;
+    }
+
+    sqlite3_bind_text(stmt, 1, t.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+    int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    return (rc == SQLITE_DONE);
+}
+
+void MusicFavoriteDb::setPreferenceTags(const QStringList &tags)
+{
+    if (!m_sqliteHandle) initDb();
+    sqlite3 *db = static_cast<sqlite3*>(m_sqliteHandle);
+    if (!db) return;
+
+    sqlite3_exec(db, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
+    sqlite3_exec(db, "DELETE FROM music_preference_tags;", nullptr, nullptr, nullptr);
+
+    const char *sql = "INSERT INTO music_preference_tags (tag, created_at) VALUES (?, ?);";
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        qint64 now = QDateTime::currentMSecsSinceEpoch();
+        for (int i = 0; i < tags.size(); ++i) {
+            QString t = tags[i].trimmed();
+            if (t.isEmpty()) continue;
+            sqlite3_bind_text(stmt, 1, t.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_int64(stmt, 2, now + i);
+            sqlite3_step(stmt);
+            sqlite3_reset(stmt);
+        }
+        sqlite3_finalize(stmt);
+    }
+    sqlite3_exec(db, "COMMIT;", nullptr, nullptr, nullptr);
+}
+
+void MusicFavoriteDb::clearPreferenceTags()
+{
+    if (!m_sqliteHandle) initDb();
+    sqlite3 *db = static_cast<sqlite3*>(m_sqliteHandle);
+    if (!db) return;
+
+    sqlite3_exec(db, "DELETE FROM music_preference_tags;", nullptr, nullptr, nullptr);
+}
+
+QString MusicFavoriteDb::getRecommendationMode()
+{
+    if (!m_sqliteHandle) initDb();
+    sqlite3 *db = static_cast<sqlite3*>(m_sqliteHandle);
+    if (!db) return "familiar";
+
+    const char *sql = "SELECT value FROM music_recommendation_settings WHERE key = 'mode';";
+    sqlite3_stmt *stmt = nullptr;
+    QString mode = "familiar";
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            const char *val = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+            if (val) mode = QString::fromUtf8(val);
+        }
+        sqlite3_finalize(stmt);
+    }
+    return mode;
+}
+
+void MusicFavoriteDb::setRecommendationMode(const QString &mode)
+{
+    QString m = mode.trimmed().toLower();
+    if (m != "familiar" && m != "explore" && m != "random") {
+        m = "familiar";
+    }
+
+    if (!m_sqliteHandle) initDb();
+    sqlite3 *db = static_cast<sqlite3*>(m_sqliteHandle);
+    if (!db) return;
+
+    const char *sql = "INSERT OR REPLACE INTO music_recommendation_settings (key, value) VALUES ('mode', ?);";
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_text(stmt, 1, m.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_step(stmt);
+        sqlite3_finalize(stmt);
+    }
+}
+
+void MusicFavoriteDb::recordRecentRecommendations(const QVector<SongInfo> &songs)
+{
+    if (songs.isEmpty()) return;
+    if (!m_sqliteHandle) initDb();
+    sqlite3 *db = static_cast<sqlite3*>(m_sqliteHandle);
+    if (!db) return;
+
+    sqlite3_exec(db, "BEGIN TRANSACTION;", nullptr, nullptr, nullptr);
+    const char *sql = "INSERT INTO music_recent_recommendations (track_id, source, name, artist, recommended_at) VALUES (?, ?, ?, ?, ?);";
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        qint64 now = QDateTime::currentMSecsSinceEpoch();
+        for (const auto &s : songs) {
+            sqlite3_bind_text(stmt, 1, s.id.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(stmt, 2, s.source.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(stmt, 3, s.name.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(stmt, 4, s.artist.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_int64(stmt, 5, now);
+            sqlite3_step(stmt);
+            sqlite3_reset(stmt);
+        }
+        sqlite3_finalize(stmt);
+    }
+
+    // 只保留最近 100 首历史记录
+    sqlite3_exec(db, 
+        "DELETE FROM music_recent_recommendations WHERE id NOT IN ("
+        "  SELECT id FROM music_recent_recommendations ORDER BY id DESC LIMIT 100"
+        ");", nullptr, nullptr, nullptr);
+
+    sqlite3_exec(db, "COMMIT;", nullptr, nullptr, nullptr);
+}
+
+bool MusicFavoriteDb::isRecentlyRecommended(const QString &songName, const QString &artist)
+{
+    if (songName.trimmed().isEmpty()) return false;
+    if (!m_sqliteHandle) initDb();
+    sqlite3 *db = static_cast<sqlite3*>(m_sqliteHandle);
+    if (!db) return false;
+
+    QString cleanName = songName.trimmed().toLower();
+    QString cleanArtist = artist.trimmed().toLower();
+
+    const char *sql = "SELECT COUNT(*) FROM music_recent_recommendations WHERE LOWER(name) = ? AND (LOWER(artist) = ? OR ? = '');";
+    sqlite3_stmt *stmt = nullptr;
+    bool found = false;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        sqlite3_bind_text(stmt, 1, cleanName.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 2, cleanArtist.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 3, cleanArtist.toUtf8().constData(), -1, SQLITE_TRANSIENT);
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            found = (sqlite3_column_int(stmt, 0) > 0);
+        }
+        sqlite3_finalize(stmt);
+    }
+    return found;
+}
+
+QSet<QString> MusicFavoriteDb::getRecentRecommendationKeys()
+{
+    QSet<QString> set;
+    if (!m_sqliteHandle) initDb();
+    sqlite3 *db = static_cast<sqlite3*>(m_sqliteHandle);
+    if (!db) return set;
+
+    const char *sql = "SELECT name, artist FROM music_recent_recommendations ORDER BY id DESC LIMIT 100;";
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            const char *n = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+            const char *a = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+            QString nameStr = n ? QString::fromUtf8(n).trimmed().toLower() : "";
+            QString artStr = a ? QString::fromUtf8(a).trimmed().toLower() : "";
+            if (!nameStr.isEmpty()) {
+                set.insert(nameStr + "||" + artStr);
+                set.insert(nameStr); // 单歌名也放入
+            }
+        }
+        sqlite3_finalize(stmt);
+    }
+    return set;
+}
+
+void MusicFavoriteDb::clearRecentRecommendations()
+{
+    if (!m_sqliteHandle) initDb();
+    sqlite3 *db = static_cast<sqlite3*>(m_sqliteHandle);
+    if (!db) return;
+
+    sqlite3_exec(db, "DELETE FROM music_recent_recommendations;", nullptr, nullptr, nullptr);
 }

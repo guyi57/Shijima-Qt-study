@@ -262,15 +262,200 @@ void MusicPlayerManager::clearPlaylist()
     }
 }
 
+void MusicPlayerManager::recommendSongsByMode(const QString &modeInput, int targetCount, std::function<void(const QVector<SongInfo>&)> callback)
+{
+    if (targetCount <= 0) targetCount = 6;
+    QString mode = modeInput.trimmed().toLower();
+    if (mode.isEmpty() || mode == "default") {
+        mode = MusicFavoriteDb::instance()->getRecommendationMode();
+    }
+    if (mode != "familiar" && mode != "explore" && mode != "random") {
+        mode = "familiar";
+    }
+
+    QSet<QString> recentKeys = MusicFavoriteDb::instance()->getRecentRecommendationKeys();
+
+    auto isExcluded = [this, recentKeys](const SongInfo &s) -> bool {
+        QString n = s.name.trimmed().toLower();
+        QString a = s.artist.trimmed().toLower();
+        if (n.isEmpty()) return true;
+        if (recentKeys.contains(n + "||" + a) || recentKeys.contains(n)) {
+            return true;
+        }
+        for (const auto &item : m_playlist) {
+            if ((!s.id.isEmpty() && item.id == s.id && item.source == s.source) ||
+                (item.name.trimmed().toLower() == n && item.artist.trimmed().toLower() == a)) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    auto finalizeAndReturn = [targetCount, callback](QVector<SongInfo> &pool) {
+        // 去重池
+        QVector<SongInfo> uniquePool;
+        for (const auto &s : pool) {
+            bool exists = false;
+            for (const auto &u : uniquePool) {
+                if ((!s.id.isEmpty() && u.id == s.id && u.source == s.source) ||
+                    (u.name.trimmed().toLower() == s.name.trimmed().toLower() &&
+                     u.artist.trimmed().toLower() == s.artist.trimmed().toLower())) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists) uniquePool.append(s);
+        }
+
+        std::shuffle(uniquePool.begin(), uniquePool.end(), *QRandomGenerator::global());
+        if (uniquePool.size() > targetCount) {
+            uniquePool.resize(targetCount);
+        }
+
+        // 记录到最近推荐历史防重缓存中
+        MusicFavoriteDb::instance()->recordRecentRecommendations(uniquePool);
+
+        if (callback) callback(uniquePool);
+    };
+
+    if (mode == "familiar") {
+        // 1. 熟悉模式：从收藏池 + 偏好歌手衍生推荐（共 6 首）
+        QVector<SongInfo> favorites = MusicFavoriteDb::instance()->getFavorites();
+        std::vector<SongInfo> shuffledFav(favorites.begin(), favorites.end());
+        std::shuffle(shuffledFav.begin(), shuffledFav.end(), *QRandomGenerator::global());
+
+        QVector<SongInfo> pool;
+        // 抽取未在近期推荐中的收藏歌曲
+        for (const auto &s : shuffledFav) {
+            if (!isExcluded(s)) {
+                pool.append(s);
+                if (pool.size() >= targetCount / 2) break;
+            }
+        }
+        // 若全部收藏都被排除过，则容错从收藏打乱中提取
+        if (pool.isEmpty() && !shuffledFav.empty()) {
+            for (size_t i = 0; i < shuffledFav.size() && pool.size() < targetCount / 2; ++i) {
+                pool.append(shuffledFav[i]);
+            }
+        }
+
+        // 提取喜好歌手或偏好标签进行衍生推荐
+        QStringList artists;
+        for (const auto &s : shuffledFav) {
+            QString art = s.artist.trimmed();
+            if (!art.isEmpty() && art != "未知歌手" && !artists.contains(art)) {
+                artists.append(art);
+            }
+        }
+        QStringList tags = MusicFavoriteDb::instance()->getPreferenceTags();
+        for (const auto &t : tags) {
+            if (!artists.contains(t)) artists.append(t);
+        }
+
+        QString searchKw = artists.isEmpty() ? "流行热歌" : artists[QRandomGenerator::global()->bounded(artists.size())];
+        MusicApiService::instance()->search(searchKw, "netease", 15, 1, [pool, targetCount, isExcluded, finalizeAndReturn](bool success, const QVector<SongInfo> &searchResult, const QString &) mutable {
+            if (success) {
+                for (const auto &s : searchResult) {
+                    if (!isExcluded(s)) {
+                        pool.append(s);
+                        if (pool.size() >= targetCount) break;
+                    }
+                }
+                // 若过滤后仍不足 targetCount，放宽条件补充
+                if (pool.size() < targetCount) {
+                    for (const auto &s : searchResult) {
+                        pool.append(s);
+                        if (pool.size() >= targetCount) break;
+                    }
+                }
+            }
+            finalizeAndReturn(pool);
+        });
+    }
+    else if (mode == "explore") {
+        // 2. 探索模式：直接检索全网实时热榜与爆款（共 6 首）
+        static const QStringList trendingKeywords = {
+            "2026热歌榜", "抖音热歌", "网络流行新歌", "抖音爆款民谣", "华语新歌榜", "飙升榜", "流行流行榜", "最热歌曲"
+        };
+        QString kw = trendingKeywords[QRandomGenerator::global()->bounded(static_cast<int>(trendingKeywords.size()))];
+        MusicApiService::instance()->search(kw, "netease", 20, 1, [targetCount, isExcluded, finalizeAndReturn](bool success, const QVector<SongInfo> &searchResult, const QString &) {
+            QVector<SongInfo> pool;
+            if (success) {
+                for (const auto &s : searchResult) {
+                    if (!isExcluded(s)) {
+                        pool.append(s);
+                        if (pool.size() >= targetCount) break;
+                    }
+                }
+                if (pool.size() < targetCount) {
+                    for (const auto &s : searchResult) {
+                        pool.append(s);
+                        if (pool.size() >= targetCount) break;
+                    }
+                }
+            }
+            finalizeAndReturn(pool);
+        });
+    }
+    else {
+        // 3. 随机模式：按照用户的喜好标签随机抽取组合推荐（共 6 首）
+        QStringList tags = MusicFavoriteDb::instance()->getPreferenceTags();
+        if (tags.isEmpty()) {
+            tags = { "流行", "民谣", "周杰伦", "轻音乐", "古风", "摇滚", "治愈" };
+        }
+        std::vector<QString> shuffledTags(tags.begin(), tags.end());
+        std::shuffle(shuffledTags.begin(), shuffledTags.end(), *QRandomGenerator::global());
+
+        QString tag1 = shuffledTags[0];
+        QString tag2 = shuffledTags.size() > 1 ? shuffledTags[1] : tag1;
+
+        auto collectedPool = std::make_shared<QVector<SongInfo>>();
+        auto remaining = std::make_shared<int>(2);
+        auto mtx = std::make_shared<std::mutex>();
+
+        auto onSearchDone = [tag1, tag2, collectedPool, remaining, mtx, targetCount, isExcluded, finalizeAndReturn](bool success, const QVector<SongInfo> &songs) {
+            {
+                std::lock_guard<std::mutex> lock(*mtx);
+                if (success) {
+                    for (const auto &s : songs) {
+                        if (!isExcluded(s)) {
+                            collectedPool->append(s);
+                        }
+                    }
+                }
+                (*remaining)--;
+                if (*remaining > 0) return;
+            }
+
+            // 若过滤后仍少于 targetCount，补齐
+            if (collectedPool->size() < targetCount && success && !songs.isEmpty()) {
+                for (const auto &s : songs) {
+                    collectedPool->append(s);
+                }
+            }
+            finalizeAndReturn(*collectedPool);
+        };
+
+        MusicApiService::instance()->search(tag1, "netease", 10, 1, [onSearchDone](bool s, const QVector<SongInfo> &res, const QString &) {
+            onSearchDone(s, res);
+        });
+        MusicApiService::instance()->search(tag2, "netease", 10, 1, [onSearchDone](bool s, const QVector<SongInfo> &res, const QString &) {
+            onSearchDone(s, res);
+        });
+    }
+}
+
 void MusicPlayerManager::autoRefillRecommendationsIfNeeded(bool autoPlay)
 {
     if (m_playlist.size() >= 3 || m_isRefilling) return;
     m_isRefilling = true;
 
-    QVector<SongInfo> favorites = MusicFavoriteDb::instance()->getFavorites();
-    std::cout << "[MusicPlayer] 播放列表剩余少于 3 首 (当前 " << m_playlist.size() << " 首)，正在基于 " << favorites.size() << " 首收藏歌曲智能推荐 10 首曲目..." << std::endl;
+    QString mode = MusicFavoriteDb::instance()->getRecommendationMode();
+    QString modeName = (mode == "explore") ? "探索模式" : (mode == "random" ? "随机模式" : "熟悉模式");
 
-    auto finishRefill = [this, autoPlay](const QVector<SongInfo> &recommended) {
+    std::cout << "[MusicPlayer] 播放列表剩余少于 3 首 (当前 " << m_playlist.size() << " 首)，正在按「" << modeName.toStdString() << "」推荐 6 首不重复曲目..." << std::endl;
+
+    recommendSongsByMode(mode, 6, [this, autoPlay, modeName](const QVector<SongInfo> &recommended) {
         m_isRefilling = false;
         if (recommended.isEmpty()) {
             if (m_playlist.isEmpty()) {
@@ -281,22 +466,8 @@ void MusicPlayerManager::autoRefillRecommendationsIfNeeded(bool autoPlay)
 
         bool wasEmpty = m_playlist.isEmpty();
 
-        // 智能追加：去重后追加到列表末尾
-        int added = 0;
-        for (const auto &s : recommended) {
-            bool exists = false;
-            for (const auto &item : m_playlist) {
-                if (item.source == s.source && item.id == s.id) {
-                    exists = true;
-                    break;
-                }
-            }
-            if (!exists) {
-                m_playlist.append(s);
-                added++;
-                if (added >= 10) break;
-            }
-        }
+        // 智能追加到列表末尾
+        int added = addBatchToPlaylist(recommended);
 
         if (wasEmpty) {
             m_currentIndex = 0;
@@ -305,92 +476,20 @@ void MusicPlayerManager::autoRefillRecommendationsIfNeeded(bool autoPlay)
         MusicFavoriteDb::instance()->savePlaylist(m_playlist, m_currentIndex);
         if (m_onPlaylistUpdated) m_onPlaylistUpdated();
 
-        // 提示桌宠气泡 (紧凑萌系气泡，零失焦)
+        // 提示桌宠气泡
         ShijimaWidget *target = BehaviorEngine::instance()->activeWidget();
         if (target != nullptr) {
             if (wasEmpty) {
-                target->showMessage("🎵 播放列表已空，根据你的收藏为你推荐了 10 首好歌~ ✨", 4000);
+                target->showMessage(QString("🎵 播放列表已空，根据「%1」为你推荐了 %2 首好歌~ ✨").arg(modeName).arg(added), 4000);
             } else {
-                target->showMessage("🎵 待播曲目快见底啦，已为你自动续上 10 首推荐好歌~ ✨", 4000);
+                target->showMessage(QString("🎵 待播曲目快见底啦，根据「%1」已为你续上 %2 首新鲜好歌~ ✨").arg(modeName).arg(added), 4000);
             }
         }
 
         if (autoPlay && wasEmpty && !m_playlist.isEmpty()) {
             playSong(m_playlist[0]);
         }
-    };
-
-    // 1. 若有收藏歌曲，基于收藏喜好推荐
-    if (!favorites.isEmpty()) {
-        std::vector<SongInfo> shuffledFav(favorites.begin(), favorites.end());
-        std::shuffle(shuffledFav.begin(), shuffledFav.end(), *QRandomGenerator::global());
-
-        // 提取收藏歌手与歌曲关键词
-        QStringList artists;
-        for (const auto &s : shuffledFav) {
-            QString art = s.artist.trimmed();
-            if (!art.isEmpty() && art != "未知歌手" && !artists.contains(art)) {
-                artists.append(art);
-            }
-        }
-
-        QString searchKeyword = artists.isEmpty() ? shuffledFav[0].name : artists[QRandomGenerator::global()->bounded(artists.size())];
-        QString searchSource = shuffledFav[0].source.isEmpty() ? "netease" : shuffledFav[0].source;
-
-        MusicApiService::instance()->search(searchKeyword, searchSource, 15, 1, [this, shuffledFav, finishRefill](bool success, const QVector<SongInfo> &searchResult, const QString &) {
-            QVector<SongInfo> pool;
-            // 优先混入 3~5 首收藏中的精品歌曲
-            for (size_t i = 0; i < shuffledFav.size() && pool.size() < 5; ++i) {
-                pool.append(shuffledFav[i]);
-            }
-
-            // 混入关联推荐歌曲
-            if (success) {
-                for (const auto &s : searchResult) {
-                    bool exists = false;
-                    for (const auto &p : pool) {
-                        if (p.id == s.id || (p.name == s.name && p.artist == s.artist)) {
-                            exists = true;
-                            break;
-                        }
-                    }
-                    if (!exists) {
-                        pool.append(s);
-                        if (pool.size() >= 10) break;
-                    }
-                }
-            }
-
-            // 若仍不足 10 首，使用其余收藏歌曲补齐
-            for (size_t i = pool.size(); i < shuffledFav.size() && pool.size() < 10; ++i) {
-                bool exists = false;
-                for (const auto &p : pool) {
-                    if (p.id == shuffledFav[i].id) {
-                        exists = true;
-                        break;
-                    }
-                }
-                if (!exists) pool.append(shuffledFav[i]);
-            }
-
-            std::shuffle(pool.begin(), pool.end(), *QRandomGenerator::global());
-            if (pool.size() > 10) {
-                pool.resize(10);
-            }
-
-            finishRefill(pool);
-        });
-    } else {
-        // 2. 没有任何收藏歌曲时的冷启动：搜索热门流行精选
-        static const QStringList fallbackKeywords = { "华语热歌", "流行精选", "治愈系", "轻音乐", "欧美流行", "ACG精选" };
-        QString kw = fallbackKeywords[QRandomGenerator::global()->bounded(static_cast<int>(fallbackKeywords.size()))];
-        MusicApiService::instance()->search(kw, "netease", 15, 1, [finishRefill](bool success, const QVector<SongInfo> &searchResult, const QString &) {
-            QVector<SongInfo> pool = searchResult;
-            std::shuffle(pool.begin(), pool.end(), *QRandomGenerator::global());
-            if (pool.size() > 10) pool.resize(10);
-            finishRefill(pool);
-        });
-    }
+    });
 }
 
 

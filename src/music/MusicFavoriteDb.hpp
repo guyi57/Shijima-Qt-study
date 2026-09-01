@@ -75,6 +75,23 @@ public:
     void clearSearchHistory();
     void removeSearchHistory(const QString &keyword);
 
+    // 喜好标签（Preference Tags）管理
+    QStringList getPreferenceTags();
+    bool addPreferenceTag(const QString &tag);
+    bool removePreferenceTag(const QString &tag);
+    void setPreferenceTags(const QStringList &tags);
+    void clearPreferenceTags();
+
+    // 推荐模式 (familiar: 熟悉模式, explore: 探索模式, random: 随机模式)
+    QString getRecommendationMode();
+    void setRecommendationMode(const QString &mode);
+
+    // 近期推荐历史防重缓存（保留最近 100 首）
+    void recordRecentRecommendations(const QVector<SongInfo> &songs);
+    bool isRecentlyRecommended(const QString &songName, const QString &artist = "");
+    QSet<QString> getRecentRecommendationKeys();
+    void clearRecentRecommendations();
+
 private:
     MusicFavoriteDb();
     ~MusicFavoriteDb();

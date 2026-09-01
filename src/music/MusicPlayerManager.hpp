@@ -34,6 +34,7 @@ public:
     void removeFromPlaylist(int index);
     void clearPlaylist();
     void autoRefillRecommendationsIfNeeded(bool autoPlay = true);
+    void recommendSongsByMode(const QString &mode, int count, std::function<void(const QVector<SongInfo>&)> callback);
     const QVector<SongInfo>& playlist() const { return m_playlist; }
     int currentIndex() const { return m_currentIndex; }
     SongInfo currentSong() const;

@@ -3,6 +3,7 @@
 #include <QWidget>
 #include <QPointF>
 #include <QTimer>
+#include <QVector>
 
 class TrashTargetWidget : public QWidget {
 public:
@@ -18,8 +19,20 @@ protected:
 
 private:
     double m_opacity = 0.0;
-    double m_scale = 0.8;
+    double m_scale = 0.2;
+    double m_targetScale = 1.0;
+    double m_rotationAngle = 0.0;
     bool m_absorbing = false;
     double m_absorbProgress = 0.0;
     QTimer *m_animTimer = nullptr;
+
+    struct Particle {
+        double angle;
+        double radius;
+        double speed;
+        double size;
+        QColor color;
+    };
+    QVector<Particle> m_particles;
+    void initParticles();
 };

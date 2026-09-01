@@ -31,9 +31,10 @@ private:
     TrashTargetWidget *m_trashWidget = nullptr;
     QString m_fileName;
 
-    int m_stage = 0; // 0: approach, 1: grab, 2: push, 3: throw, 4: celebrate
+    int m_stage = 0; // 0: align, 1: crawl push, 2: black hole swallow, 3: celebrate
     int m_stageTickCount = 0;
+    bool m_pushingToRight = true;
     QPointF m_fileSpawnPos;
-    QPointF m_trashPos;
+    QPointF m_blackHolePos;
     QTimer *m_tickTimer = nullptr;
 };

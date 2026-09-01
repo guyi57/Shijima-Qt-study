@@ -14,19 +14,19 @@ public:
     void init();
     void setEnabled(bool enabled);
     bool isEnabled() const { return m_enabled; }
+    void onNativeFileEvent(const QString &filePath);
 
 private:
     TrashWatcher();
     ~TrashWatcher() override = default;
 
     void onDirectoryChanged(const QString &path);
-    void checkForNewTrashFiles();
     void updateSnapshot();
 
     bool m_enabled = true;
     QString m_trashPath;
     QFileSystemWatcher *m_watcher = nullptr;
-    QTimer *m_pollTimer = nullptr;
+    void *m_fseventStream = nullptr;
     QSet<QString> m_knownFiles;
     qint64 m_lastTriggerTime = 0;
 };

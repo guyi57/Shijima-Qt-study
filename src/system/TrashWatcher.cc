@@ -6,6 +6,29 @@
 #include <QFileInfo>
 #include <iostream>
 
+#if defined(Q_OS_MAC)
+#include <CoreServices/CoreServices.h>
+#include <dispatch/dispatch.h>
+
+static void fseventTrashCallback(
+    ConstFSEventStreamRef /*streamRef*/,
+    void *clientCallBackInfo,
+    size_t numEvents,
+    void *eventPaths,
+    const FSEventStreamEventFlags /*eventFlags*/[],
+    const FSEventStreamEventId /*eventIds*/[])
+{
+    TrashWatcher *watcher = static_cast<TrashWatcher*>(clientCallBackInfo);
+    if (!watcher || !watcher->isEnabled()) return;
+
+    char **paths = (char **)eventPaths;
+    for (size_t i = 0; i < numEvents; ++i) {
+        QString changedPath = QString::fromUtf8(paths[i]);
+        watcher->onNativeFileEvent(changedPath);
+    }
+}
+#endif
+
 TrashWatcher* TrashWatcher::instance() {
     static TrashWatcher s_instance;
     return &s_instance;
@@ -29,17 +52,40 @@ void TrashWatcher::init() {
 
     updateSnapshot();
 
+#if defined(Q_OS_MAC)
+    // 采用 macOS 原生内核级 FSEvents (0% CPU 占用、零轮询、由系统内核直接中断推送事件)
+    CFStringRef mypath = CFStringCreateWithCString(kCFAllocatorDefault, m_trashPath.toUtf8().constData(), kCFStringEncodingUTF8);
+    CFArrayRef pathsToWatch = CFArrayCreate(NULL, (const void **)&mypath, 1, NULL);
+    CFOptionFlags flags = kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagNoDefer;
+
+    FSEventStreamContext context = {0, (void*)this, NULL, NULL, NULL};
+    FSEventStreamRef stream = FSEventStreamCreate(
+        kCFAllocatorDefault,
+        &fseventTrashCallback,
+        &context,
+        pathsToWatch,
+        kFSEventStreamEventIdSinceNow,
+        0.05, // 0.05s 极速内核响应
+        flags
+    );
+
+    if (stream) {
+        FSEventStreamSetDispatchQueue(stream, dispatch_get_main_queue());
+        FSEventStreamStart(stream);
+        m_fseventStream = (void*)stream;
+    }
+    CFRelease(pathsToWatch);
+    CFRelease(mypath);
+
+    std::cout << "[TrashWatcher] 已启动 macOS 原生内核级 FSEvents 零轮询事件监听: " << m_trashPath.toStdString()
+              << " (初始文件数: " << m_knownFiles.size() << ")" << std::endl;
+#else
     m_watcher = new QFileSystemWatcher(this);
     m_watcher->addPath(m_trashPath);
     connect(m_watcher, &QFileSystemWatcher::directoryChanged, this, &TrashWatcher::onDirectoryChanged);
-
-    // 针对 macOS 特殊权限 ACL 机制，辅以 600ms 轻量级轮询扫描，确保 100% 捕获 Finder 删除事件
-    m_pollTimer = new QTimer(this);
-    connect(m_pollTimer, &QTimer::timeout, this, &TrashWatcher::checkForNewTrashFiles);
-    m_pollTimer->start(600);
-
-    std::cout << "[TrashWatcher] 已启动回收站双模监听(kqueue+poll): " << m_trashPath.toStdString()
+    std::cout << "[TrashWatcher] 已启动 QFileSystemWatcher 目录事件监听: " << m_trashPath.toStdString()
               << " (初始文件数: " << m_knownFiles.size() << ")" << std::endl;
+#endif
 }
 
 void TrashWatcher::setEnabled(bool enabled) {
@@ -53,27 +99,58 @@ void TrashWatcher::updateSnapshot() {
 
     QStringList entries = trashDir.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
     for (const auto &entry : entries) {
-        m_knownFiles.insert(entry);
+        if (entry != ".DS_Store") {
+            m_knownFiles.insert(entry);
+        }
     }
 }
 
-void TrashWatcher::onDirectoryChanged(const QString &) {
-    checkForNewTrashFiles();
+void TrashWatcher::onDirectoryChanged(const QString &path) {
+    onNativeFileEvent(path);
 }
 
-void TrashWatcher::checkForNewTrashFiles() {
+void TrashWatcher::onNativeFileEvent(const QString &filePath) {
     if (!m_enabled) return;
 
+    QFileInfo fi(filePath);
+    QString filename = fi.fileName();
+
+    // 1. 如果内核直接报告了被移入废纸篓的具体文件
+    if (!filename.isEmpty() && filename != ".Trash" && filename != ".DS_Store") {
+        if (!m_knownFiles.contains(filename)) {
+            m_knownFiles.insert(filename);
+
+            qint64 now = QDateTime::currentMSecsSinceEpoch();
+            if (now - m_lastTriggerTime < 2000) return;
+            m_lastTriggerTime = now;
+
+            std::cout << "[TrashWatcher] macOS FSEvents 零轮询捕获到文件移入废纸篓: "
+                      << filename.toStdString() << std::endl;
+
+            QTimer::singleShot(0, [filename]() {
+                auto manager = ShijimaManager::defaultManager();
+                if (!manager) return;
+                auto &mascots = manager->mascots();
+                if (!mascots.empty() && !FileDisposalSequence::instance()->isRunning()) {
+                    FileDisposalSequence::instance()->start(mascots.front(), filename);
+                }
+            });
+            return;
+        }
+    }
+
+    // 2. 否则只在收到系统内核通知时做一次增量快照比对
     QDir trashDir(m_trashPath);
     if (!trashDir.exists()) return;
 
     QStringList currentEntries = trashDir.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
     QSet<QString> currentSet;
     for (const auto &e : currentEntries) {
-        currentSet.insert(e);
+        if (e != ".DS_Store") {
+            currentSet.insert(e);
+        }
     }
 
-    // 查找新增进入回收站的文件
     QSet<QString> newFiles = currentSet - m_knownFiles;
     m_knownFiles = currentSet;
 
@@ -81,16 +158,15 @@ void TrashWatcher::checkForNewTrashFiles() {
 
     qint64 now = QDateTime::currentMSecsSinceEpoch();
     if (now - m_lastTriggerTime < 2000) {
-        // 2.0秒内防抖（防止批量删除多个文件触发多次）
         return;
     }
     m_lastTriggerTime = now;
 
     QString latestDeletedFile = *newFiles.begin();
-    std::cout << "[TrashWatcher] 监听到真实文件被删除移入废纸篓: "
+    std::cout << "[TrashWatcher] macOS FSEvents 零轮询捕获到文件移入废纸篓: "
               << latestDeletedFile.toStdString() << std::endl;
 
-    // 确保在 Qt GUI 主线程上触发黑洞吞噬与爬行推文件动画
+    // 确保在 Qt GUI 主线程触发黑洞吞噬与爬行推文件动画
     QTimer::singleShot(0, [latestDeletedFile]() {
         auto manager = ShijimaManager::defaultManager();
         if (!manager) return;

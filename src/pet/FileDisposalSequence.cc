@@ -86,11 +86,8 @@ void FileDisposalSequence::start(ShijimaWidget *pet, const QString &fileName, co
     m_trashWidget = new TrashTargetWidget();
     m_trashWidget->showAt(m_blackHolePos);
 
-    // 暂停日常自发漫游逻辑，接管物理引力控制
+    // 暂停日常自发漫游逻辑，转由本序列接管
     pet->m_paused = true;
-    if (pet->mascot().state) {
-        pet->mascot().state->dragging = true;
-    }
     pet->showMessage(QString("👀 发现待处理文件！正在全速赶往现场~"), 2000);
 
     // 启动序列定时器 (30ms = ~33fps 丝滑刷新)
@@ -109,7 +106,6 @@ void FileDisposalSequence::step() {
         return;
     }
 
-    state->dragging = true; // 持续锁定物理引擎，防止误判下落
     m_stageTickCount++;
 
     // =========================================================================
@@ -124,7 +120,7 @@ void FileDisposalSequence::step() {
         state->looking_right = (dx > 0);
         if (!m_pet->trySetBehavior("RunAlongWorkAreaFloor")) {
             if (!m_pet->trySetBehavior("WalkAlongWorkAreaFloor")) {
-                m_pet->trySetBehavior("ChaseMouse");
+                m_pet->trySetBehavior("WalkAlongIECeiling");
             }
         }
 
@@ -150,7 +146,7 @@ void FileDisposalSequence::step() {
         state->anchor.y = m_petTargetPos.y();
         if (!m_pet->trySetBehavior("CrawlAlongWorkAreaFloor")) {
             if (!m_pet->trySetBehavior("CrawlAlongIECeiling")) {
-                m_pet->trySetBehavior("SitDown");
+                m_pet->trySetBehavior("LieDown");
             }
         }
 
@@ -240,11 +236,17 @@ void FileDisposalSequence::step() {
         }
     }
 
-    // 核心保证：每一帧都推进底层动画、锁定坐标并重绘
+    // 核心保证：每一帧都推进底层动画、锁定垂直坐标并重绘
     if (m_pet) {
         m_pet->mascot().tick();
+
+        // 纠正 Shimeji 引擎因高度不是屏幕地板而误判的 Fall 动作
         if (m_stage >= 1 && m_stage <= 4 && m_pet->mascot().state) {
             m_pet->mascot().state->anchor.y = m_petTargetPos.y();
+            QString curBh = m_pet->currentBehaviorName();
+            if (curBh.contains("Fall", Qt::CaseInsensitive)) {
+                m_pet->trySetBehavior(m_stage == 2 ? "CrawlAlongWorkAreaFloor" : "SitDown");
+            }
         }
         m_pet->updateOffsets();
         m_pet->repaint();
@@ -268,9 +270,6 @@ void FileDisposalSequence::finish() {
     }
 
     if (m_pet) {
-        if (m_pet->mascot().state) {
-            m_pet->mascot().state->dragging = false;
-        }
         m_pet->m_paused = false;
         m_pet = nullptr;
     }

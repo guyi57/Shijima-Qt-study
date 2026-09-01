@@ -65,6 +65,9 @@ void setupFloatingBubbleWindow(QWidget *widget) {
         [bubbleWin setCollectionBehavior:behavior];
         [bubbleWin setLevel:NSFloatingWindowLevel];
         [bubbleWin setHidesOnDeactivate:NO];
+        [bubbleWin setOpaque:NO];
+        [bubbleWin setBackgroundColor:[NSColor clearColor]];
+        [bubbleWin setHasShadow:NO];
 
         Class originalClass = object_getClass(bubbleWin);
         const char *subclassName = "ShijimaBubbleNonActivatingNSWindow";

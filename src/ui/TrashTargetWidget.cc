@@ -53,6 +53,7 @@ void TrashTargetWidget::showAt(const QPointF &pos) {
     m_glowPhase = 0.0;
     show();
     raise();
+    Platform::setupFloatingBubbleWindow(this);
 
     if (m_animTimer) {
         m_animTimer->stop();

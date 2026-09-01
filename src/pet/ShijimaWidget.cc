@@ -809,14 +809,12 @@ void ShijimaWidget::dropEvent(QDropEvent *event) {
 
     QFileInfo fi(localPath);
     QString fileName = fi.fileName();
+    QPointF dropPos = mapToGlobal(event->position().toPoint());
 
-    // 真正将文件移入废纸篓 (macOS/Linux/Windows 原生安全回收站 API)
-    bool trashOk = QFile::moveToTrash(localPath);
-    std::cout << "[DragDrop] 拖拽删除文件: " << localPath.toStdString()
-              << " (移入废纸篓: " << (trashOk ? "成功" : "失败") << ")" << std::endl;
+    std::cout << "[DragDrop] 拖拽删除文件: " << localPath.toStdString() << " 位置: " << dropPos.x() << "," << dropPos.y() << std::endl;
 
-    // 触发连贯搬运扔进废纸篓动画
-    FileDisposalSequence::instance()->start(this, fileName);
+    // 触发连贯搬运扔进黑洞废纸篓动画
+    FileDisposalSequence::instance()->start(this, fileName, localPath, dropPos);
     event->acceptProposedAction();
 }
 

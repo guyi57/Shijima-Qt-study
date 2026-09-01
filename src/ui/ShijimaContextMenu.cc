@@ -215,6 +215,7 @@ ShijimaContextMenu::ShijimaContextMenu(ShijimaWidget *parent)
         action = addAction("🕳️ 黑洞吞噬本地文件...");
         connect(action, &QAction::triggered, [petPtr](){
             if (!petPtr) return;
+            QPoint mousePos = QCursor::pos();
             QString filePath = QFileDialog::getOpenFileName(
                 nullptr,
                 "选择要让桌宠推入黑洞吞噬的文件",
@@ -223,7 +224,7 @@ ShijimaContextMenu::ShijimaContextMenu(ShijimaWidget *parent)
             );
             if (!filePath.isEmpty() && petPtr) {
                 QFileInfo fi(filePath);
-                FileDisposalSequence::instance()->start(petPtr.data(), fi.fileName(), filePath);
+                FileDisposalSequence::instance()->start(petPtr.data(), fi.fileName(), filePath, mousePos);
             }
         });
     }

@@ -14,8 +14,8 @@ class FileDisposalSequence : public QObject {
 public:
     static FileDisposalSequence* instance();
 
-    // 启动搬运并删除文件动画序列
-    void start(ShijimaWidget *pet, const QString &fileName = "garbage.tmp", const QString &realFilePath = "");
+    // 启动搬运并删除文件动画序列 (可指定文件屏幕坐标)
+    void start(ShijimaWidget *pet, const QString &fileName = "garbage.tmp", const QString &realFilePath = "", const QPointF &customSpawnPos = QPointF(-1, -1));
 
     bool isRunning() const { return m_running; }
 
@@ -33,10 +33,12 @@ private:
     QString m_fileName;
     QString m_realFilePath;
 
-    int m_stage = 0; // 0: align, 1: crawl push, 2: black hole swallow, 3: celebrate
+    // 0: approach (奔跑寻路到文件旁), 1: align (趴地就位), 2: crawl push (趴地推向黑洞), 3: swallow (吞噬), 4: celebrate (欢呼)
+    int m_stage = 0;
     int m_stageTickCount = 0;
     bool m_pushingToRight = true;
     QPointF m_fileSpawnPos;
     QPointF m_blackHolePos;
+    QPointF m_petTargetPos;
     QTimer *m_tickTimer = nullptr;
 };

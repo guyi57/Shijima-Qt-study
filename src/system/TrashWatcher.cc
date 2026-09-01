@@ -132,7 +132,7 @@ void TrashWatcher::onNativeFileEvent(const QString &filePath) {
                 if (!manager) return;
                 auto &mascots = manager->mascots();
                 if (!mascots.empty() && !FileDisposalSequence::instance()->isRunning()) {
-                    FileDisposalSequence::instance()->start(mascots.front(), filename);
+                    FileDisposalSequence::instance()->start(mascots.front(), filename, "", QCursor::pos());
                 }
             });
             return;
@@ -172,7 +172,7 @@ void TrashWatcher::onNativeFileEvent(const QString &filePath) {
         if (!manager) return;
         auto &mascots = manager->mascots();
         if (!mascots.empty() && !FileDisposalSequence::instance()->isRunning()) {
-            FileDisposalSequence::instance()->start(mascots.front(), latestDeletedFile);
+            FileDisposalSequence::instance()->start(mascots.front(), latestDeletedFile, "", QCursor::pos());
         }
     });
 }

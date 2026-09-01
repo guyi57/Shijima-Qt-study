@@ -29,6 +29,7 @@ void FloatingFileWidget::spawnAt(const QPointF &pos) {
     m_tossing = false;
     show();
     raise();
+    Platform::setupFloatingBubbleWindow(this);
     update();
 }
 

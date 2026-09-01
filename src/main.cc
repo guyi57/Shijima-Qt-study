@@ -29,6 +29,8 @@
 #include "MusicFavoriteDb.hpp"
 #include "SettingsDb.hpp"
 #include "TrashWatcher.hpp"
+#include "UpdateManager.hpp"
+#include <QTimer>
 #include "cli.hpp"
 #include <httplib.h>
 
@@ -68,6 +70,21 @@ int main(int argc, char **argv) {
         BehaviorEngine::instance()->start();
         SystemObserver::instance()->start();
         TrashWatcher::instance()->init();
+
+        // 启动 3 秒后后台静默检测新版本，若有更新则可爱弹气泡提醒
+        QTimer::singleShot(3000, []() {
+            UpdateManager::instance()->checkForUpdates(true /* silent */, [](const UpdateInfo &info, const QString &) {
+                if (info.hasUpdate) {
+                    auto manager = ShijimaManager::defaultManager();
+                    if (manager && !manager->mascots().empty()) {
+                        manager->mascots().front()->showMessage(
+                            QString("🎉 **发现 guyi-bot 新版本 %1！**\n\n可右键桌宠点击「🔄 检查更新」一键自动升级~").arg(info.remoteVersion),
+                            8000
+                        );
+                    }
+                }
+            });
+        });
     }
     catch (std::exception &ex) {
         QMessageBox *msg = new QMessageBox {};

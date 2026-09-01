@@ -22,6 +22,9 @@
 #include "BehaviorEngine.hpp"
 #include "MusicPlayerDialog.hpp"
 #include "FileDisposalSequence.hpp"
+#include "UpdateManager.hpp"
+#include "UpdateDialog.hpp"
+#include <QMessageBox>
 #include <QMap>
 
 // 行为名称中文翻译映射表
@@ -212,6 +215,22 @@ ShijimaContextMenu::ShijimaContextMenu(ShijimaWidget *parent)
     action = addAction("⚙️ AI 模型与记忆配置");
     connect(action, &QAction::triggered, [this](){
         shijimaParent()->showAgentSettings();
+    });
+
+    // Check for Updates
+    action = addAction("🔄 检查更新...");
+    connect(action, &QAction::triggered, [this](){
+        UpdateManager::instance()->checkForUpdates(false /* not silent */, [this](const UpdateInfo &info, const QString &err) {
+            if (!err.isEmpty()) {
+                QMessageBox::warning(shijimaParent(), "检查更新失败", err);
+            } else if (info.hasUpdate) {
+                auto dialog = new UpdateDialog(info, shijimaParent());
+                dialog->setAttribute(Qt::WA_DeleteOnClose);
+                dialog->show();
+            } else {
+                QMessageBox::information(shijimaParent(), "检查更新", QString("🎉 当前已是最新版本 (v%1)！").arg(info.currentVersion));
+            }
+        });
     });
 
     // Pause checkbox

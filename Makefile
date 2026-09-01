@@ -51,9 +51,11 @@ SOURCES = src/main.cc \
 	src/timer/TimerManager.cc \
 	src/timer/TimerListDialog.cc \
 	src/system/TrashWatcher.cc \
+	src/system/UpdateManager.cc \
 	$(PLATFORM_SYSTEM_SOURCES) \
 	src/ui/FloatingFileWidget.cc \
 	src/ui/TrashTargetWidget.cc \
+	src/ui/UpdateDialog.cc \
 	src/ui/MessageBubble.cc \
 	src/ui/ScoreBadgeWidget.cc \
 	src/ui/PetStatusBarWidget.cc \

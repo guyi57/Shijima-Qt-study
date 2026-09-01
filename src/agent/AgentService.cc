@@ -904,11 +904,13 @@ void AgentService::ask(QString const& contextText,
         }
     }
 
-    // 智能分流判定：若包含音乐播放/推荐/歌单/搜歌等意图，走音乐工具
+    // 智能分流判定：若包含音乐播放/推荐/歌单/搜歌/喜好画像/偏好标签等意图，走音乐工具
     bool isMusicIntent = false;
     static const QStringList musicKeywords = {
         "歌", "音乐", "播放", "暂停", "下一首", "上一首", "切歌", "放一首", "听歌",
-        "民谣", "播放列表", "加歌", "歌单", "music", "song", "play", "playlist", "推荐点"
+        "民谣", "播放列表", "加歌", "歌单", "music", "song", "play", "playlist",
+        "推荐点", "推荐", "画像", "标签", "偏好", "喜好", "熟悉模式", "探索模式", "随机模式",
+        "放歌", "搜歌", "曲目", "榜单", "热歌", "我的画像", "任务画像", "用户画像", "我的偏好"
     };
     for (const auto &kw : musicKeywords) {
         if (qLower.contains(kw)) {
@@ -975,12 +977,13 @@ void AgentService::ask(QString const& contextText,
         "你拥有管理本地系统定时器工具（timer_manage）、音乐播放器工具（music_player_manage）与网络热点搜索工具（web_search）。\n"
         "【音乐播放器与喜好推荐工具指南】\n"
         "1. 智能按模式推荐歌曲 (每次6首): action='recommend_by_mode', mode='familiar'|'explore'|'random'|'default', play_now=true\n"
+        "   - 当用户说「推荐音乐」、「推荐点歌」、「放歌」、「来点音乐」、「推荐歌曲」时，直接调用 recommend_by_mode！\n"
         "   - 'familiar' (熟悉模式): 从用户收藏池 + 喜好偏好衍生推荐 6 首；\n"
         "   - 'explore' (探索模式): 推荐当前全网最新最火爆的热点流行歌曲 6 首；\n"
         "   - 'random' (随机模式): 按照用户的喜好标签（如周杰伦、民谣、摇滚等）随机组合推荐 6 首；\n"
         "   - 系统内置了近期推荐去重机制，连续推荐不会重复拉取相同歌曲。\n"
-        "2. 查看与管理喜好标签/推荐模式:\n"
-        "   - 查看喜好标签与模式: action='list_preference_tags'\n"
+        "2. 查看与管理喜好标签/画像/推荐模式:\n"
+        "   - 查看画像与喜好标签: action='list_preference_tags' (当用户询问「我的画像」、「任务画像」、「用户画像」、「喜好标签」、「音乐偏好」、「我的喜好」时立即调用！)\n"
         "   - 添加喜好标签: action='add_preference_tag', tags=['摇滚', '民谣']\n"
         "   - 删除喜好标签: action='remove_preference_tag', tags=['古风']\n"
         "   - 切换推荐模式: action='set_recommend_mode', mode='familiar'|'explore'|'random'\n"

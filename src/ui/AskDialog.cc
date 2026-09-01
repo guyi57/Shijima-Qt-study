@@ -75,19 +75,23 @@ AskDialog::AskDialog(QWidget *parent)
     });
 
     m_inputEdit = new QLineEdit(this);
-    m_inputEdit->setPlaceholderText("请输入您的问题，按 Enter 键发送...");
+    m_inputEdit->setPlaceholderText("💡 试试: 推荐点音乐 / 我的喜好画像 / 探索模式放歌 / 25分钟后提醒喝水...");
     m_inputEdit->setStyleSheet(
         "QLineEdit {"
-        "  border: 1.5px solid #dcdfe6;"
-        "  border-radius: 6px;"
-        "  padding: 8px 10px;"
-        "  font-size: 12px;"
+        "  border: 1.5px solid #cbd5e1;"
+        "  border-radius: 8px;"
+        "  padding: 9px 12px;"
+        "  font-size: 12.5px;"
+        "  background: #ffffff;"
+        "  color: #0f172a;"
         "}"
         "QLineEdit:focus {"
-        "  border-color: #409eff;"
+        "  border-color: #6366f1;"
         "}"
     );
     mainLayout->addWidget(m_inputEdit);
+
+    setupQuickPills(mainLayout);
 
     auto btnLayout = new QHBoxLayout();
     btnLayout->addStretch();
@@ -96,7 +100,7 @@ AskDialog::AskDialog(QWidget *parent)
     m_sendBtn = new QPushButton("发送 ↵", this);
 
     m_cancelBtn->setStyleSheet("padding: 6px 14px; border-radius: 6px; border: 1px solid #dcdfe6; background: #fff;");
-    m_sendBtn->setStyleSheet("padding: 6px 16px; border-radius: 6px; border: none; background: #409eff; color: white; font-weight: bold;");
+    m_sendBtn->setStyleSheet("padding: 6px 16px; border-radius: 6px; border: none; background: #6366f1; color: white; font-weight: bold;");
 
     m_cancelBtn->setCursor(Qt::PointingHandCursor);
     m_sendBtn->setCursor(Qt::PointingHandCursor);
@@ -122,6 +126,60 @@ AskDialog::AskDialog(QWidget *parent)
 
     connect(m_sendBtn, &QPushButton::clicked, this, doSend);
     connect(m_inputEdit, &QLineEdit::returnPressed, this, doSend);
+}
+
+void AskDialog::setupQuickPills(QVBoxLayout *mainLayout) {
+    m_quickPillsWidget = new QWidget(this);
+    auto pillLayout = new QHBoxLayout(m_quickPillsWidget);
+    pillLayout->setContentsMargins(0, 0, 0, 0);
+    pillLayout->setSpacing(6);
+
+    auto hintLabel = new QLabel("✨ 快捷指令:", m_quickPillsWidget);
+    hintLabel->setStyleSheet("font-size: 11px; color: #94a3b8; font-weight: 500;");
+    pillLayout->addWidget(hintLabel);
+
+    struct QuickItem {
+        QString label;
+        QString text;
+        QString tooltip;
+    };
+    QList<QuickItem> items = {
+        { "🎶 推荐音乐", "推荐点音乐到播放列表", "按当前模式精选 6 首好歌并开播" },
+        { "🏷️ 喜好画像", "查看我的喜好标签与画像", "查看我的偏好标签与推荐模式" },
+        { "🚀 探索热歌", "用探索模式推荐 6 首全网爆款热歌", "精选全网当前最新最火爆的热点流行歌曲" },
+        { "⏰ 定时提醒", "25分钟后提醒我喝水休息", "快速创建桌面定时提醒" }
+    };
+
+    for (const auto &it : items) {
+        auto btn = new QPushButton(it.label, m_quickPillsWidget);
+        btn->setToolTip(it.tooltip);
+        btn->setCursor(Qt::PointingHandCursor);
+        btn->setStyleSheet(
+            "QPushButton {"
+            "  background: #f1f5f9;"
+            "  color: #475569;"
+            "  font-size: 11px;"
+            "  font-weight: 500;"
+            "  border: 1px solid #e2e8f0;"
+            "  border-radius: 12px;"
+            "  padding: 3px 8px;"
+            "}"
+            "QPushButton:hover {"
+            "  background: #e0e7ff;"
+            "  color: #4f46e5;"
+            "  border-color: #c7d2fe;"
+            "}"
+        );
+        QString promptText = it.text;
+        connect(btn, &QPushButton::clicked, this, [this, promptText]() {
+            m_inputEdit->setText(promptText);
+            m_inputEdit->setFocus();
+            m_inputEdit->selectAll();
+        });
+        pillLayout->addWidget(btn);
+    }
+    pillLayout->addStretch();
+    mainLayout->addWidget(m_quickPillsWidget);
 }
 
 void AskDialog::promptForContext(QString const& contextText) {

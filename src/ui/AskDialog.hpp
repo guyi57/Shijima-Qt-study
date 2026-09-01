@@ -28,6 +28,9 @@ private:
     QLabel *m_previewLabel = nullptr;
     QPushButton *m_clearContextBtn = nullptr;
     QLineEdit *m_inputEdit = nullptr;
+    QWidget *m_quickPillsWidget = nullptr;
     QPushButton *m_sendBtn = nullptr;
     QPushButton *m_cancelBtn = nullptr;
+
+    void setupQuickPills(QVBoxLayout *mainLayout);
 };

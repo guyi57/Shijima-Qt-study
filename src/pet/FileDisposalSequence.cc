@@ -109,7 +109,7 @@ void FileDisposalSequence::step() {
     m_stageTickCount++;
 
     // =========================================================================
-    // 阶段 0: 跨屏幕跳跃飞奔接近文件位置 (Jumping & Leaping Approach)
+    // 阶段 0: 跨屏幕大跳跃飞奔接近文件位置 (Jumping & Leaping Approach)
     // =========================================================================
     if (m_stage == 0) {
         double curPetX = m_pet->x();
@@ -118,11 +118,14 @@ void FileDisposalSequence::step() {
         double dy = m_petTargetPos.y() - curPetY;
 
         state->looking_right = (dx > 0);
-        if (!m_pet->trySetBehavior("JumpFromBottomOfIE")) {
-            if (!m_pet->trySetBehavior("RunAlongWorkAreaFloor")) {
-                m_pet->trySetBehavior("WalkAlongWorkAreaFloor");
-            }
-        }
+
+        // 动感空中跳跃与跨步帧循环 (shime22.png 大跳，shime2~3 跑动)
+        int frameCycle = (m_stageTickCount / 3) % 4;
+        if (frameCycle == 0) state->active_frame.name = "/shime22.png"; // 空中大跳
+        else if (frameCycle == 1) state->active_frame.name = "/shime2.png";
+        else if (frameCycle == 2) state->active_frame.name = "/shime22.png";
+        else state->active_frame.name = "/shime3.png";
+        state->active_frame.right_name = "";
 
         // 动感跳跃曲线飞向文件
         double stepSpeedX = std::min(16.0, std::abs(dx));
@@ -131,7 +134,7 @@ void FileDisposalSequence::step() {
         if (std::abs(dy) > 1.0) state->anchor.y += (dy > 0 ? stepSpeedY : -stepSpeedY);
 
         // 叠加上下跳跃弧线
-        double jumpBounce = std::sin(m_stageTickCount * 0.35) * 15.0;
+        double jumpBounce = std::sin(m_stageTickCount * 0.35) * 16.0;
         state->anchor.y -= jumpBounce;
 
         bool reachedPetTarget = (std::abs(dx) <= 20.0 && std::abs(dy) <= 25.0);
@@ -148,11 +151,8 @@ void FileDisposalSequence::step() {
     else if (m_stage == 1) {
         state->looking_right = m_pushingToRight;
         state->anchor.y = m_petTargetPos.y();
-        if (!m_pet->trySetBehavior("SitWhileDanglingLegs")) {
-            if (!m_pet->trySetBehavior("WalkAndThrowIEFromRight")) {
-                m_pet->trySetBehavior("SitDown");
-            }
-        }
+        state->active_frame.name = "/shime30.png"; // 坐姿抬腿准备
+        state->active_frame.right_name = "";
 
         if (m_stageTickCount >= 8) { // 240ms 准备完毕
             m_stage = 2;
@@ -160,18 +160,19 @@ void FileDisposalSequence::step() {
         }
     }
     // =========================================================================
-    // 阶段 2: 连环踢腿/推行向前移动 (Dynamic Kicking Push)
+    // 阶段 2: 连环踢腿推文件向前移动 (Dynamic Kicking Push)
     // =========================================================================
     else if (m_stage == 2) {
         state->looking_right = m_pushingToRight;
         state->anchor.y = m_petTargetPos.y();
         
-        // 持续使用踢腿与投掷动作
-        if (!m_pet->trySetBehavior("SitWhileDanglingLegs")) {
-            if (!m_pet->trySetBehavior("WalkAndThrowIEFromRight")) {
-                m_pet->trySetBehavior("ThrowIEFromRight");
-            }
-        }
+        // 连环踢腿帧切换 (shime31.png 伸腿, shime32.png 蹬腿, shime33.png 踹击, shime37.png 飞踢)
+        int kickIndex = (m_stageTickCount / 3) % 4;
+        if (kickIndex == 0) state->active_frame.name = "/shime31.png";
+        else if (kickIndex == 1) state->active_frame.name = "/shime32.png";
+        else if (kickIndex == 2) state->active_frame.name = "/shime33.png";
+        else state->active_frame.name = "/shime37.png";
+        state->active_frame.right_name = "";
 
         double pushSpeed = 5.5;
         state->anchor.x += (m_pushingToRight ? pushSpeed : -pushSpeed);
@@ -202,12 +203,10 @@ void FileDisposalSequence::step() {
     // =========================================================================
     else if (m_stage == 3) {
         state->anchor.y = m_petTargetPos.y();
+        state->active_frame.name = "/shime37.png"; // 终极暴扣大飞踢
+        state->active_frame.right_name = "";
+
         if (m_stageTickCount == 1) {
-            if (!m_pet->trySetBehavior("WalkAndThrowIEFromRight")) {
-                if (!m_pet->trySetBehavior("ThrowIEFromRight")) {
-                    m_pet->trySetBehavior("SitWhileDanglingLegs");
-                }
-            }
             // 触发文件旋转缩小并被黑洞引力吸入
             if (m_fileWidget) {
                 m_fileWidget->tossTo(m_blackHolePos, [this]() {
@@ -225,9 +224,6 @@ void FileDisposalSequence::step() {
         if (m_stageTickCount >= 22) { // 约 660ms 吞噬吸收完成
             m_stage = 4;
             m_stageTickCount = 0;
-            if (!m_pet->trySetBehavior("SitAndSpinHead")) {
-                m_pet->trySetBehavior("SitAndFaceMouse");
-            }
             m_pet->showMessage(QString("✨ 🕳️《%1》已被黑洞吞噬移入系统废纸篓！").arg(m_fileName), 3000);
         }
     }
@@ -236,24 +232,22 @@ void FileDisposalSequence::step() {
     // =========================================================================
     else if (m_stage == 4) {
         state->anchor.y = m_petTargetPos.y();
+        // 庆祝转头摇头 (shime26~29.png)
+        int spinIdx = (m_stageTickCount / 4) % 4;
+        if (spinIdx == 0) state->active_frame.name = "/shime26.png";
+        else if (spinIdx == 1) state->active_frame.name = "/shime27.png";
+        else if (spinIdx == 2) state->active_frame.name = "/shime28.png";
+        else state->active_frame.name = "/shime29.png";
+        state->active_frame.right_name = "";
+
         if (m_stageTickCount >= 28) {
             finish();
             return;
         }
     }
 
-    // 核心保证：每一帧都推进底层动画、锁定垂直坐标并重绘
+    // 核心保证：直接根据 active_frame 平移重绘，彻底避免底层 Fall 覆盖！
     if (m_pet) {
-        m_pet->mascot().tick();
-
-        // 纠正 Shimeji 引擎因高度不是屏幕地板而误判的 Fall 动作，锁定踢腿动作
-        if (m_stage >= 1 && m_stage <= 4 && m_pet->mascot().state) {
-            m_pet->mascot().state->anchor.y = m_petTargetPos.y();
-            QString curBh = m_pet->currentBehaviorName();
-            if (curBh.contains("Fall", Qt::CaseInsensitive)) {
-                m_pet->trySetBehavior(m_stage == 2 ? "SitWhileDanglingLegs" : "SitDown");
-            }
-        }
         m_pet->updateOffsets();
         m_pet->repaint();
     }
@@ -276,6 +270,9 @@ void FileDisposalSequence::finish() {
     }
 
     if (m_pet) {
+        if (!m_pet->trySetBehavior("SitAndFaceMouse")) {
+            m_pet->trySetBehavior("StandUp");
+        }
         m_pet->m_paused = false;
         m_pet = nullptr;
     }

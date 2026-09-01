@@ -28,6 +28,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QDir>
+#include <QPointer>
 #include <QMap>
 
 // 行为名称中文翻译映射表
@@ -209,25 +210,34 @@ ShijimaContextMenu::ShijimaContextMenu(ShijimaWidget *parent)
     });
 
     // File Disposal by Black Hole
-    action = addAction("🕳️ 黑洞吞噬本地文件...");
-    connect(action, &QAction::triggered, [this](){
-        QString filePath = QFileDialog::getOpenFileName(
-            nullptr,
-            "选择要让桌宠推入黑洞吞噬的文件",
-            QDir::homePath() + "/Desktop",
-            "所有文件 (*.*)"
-        );
-        if (!filePath.isEmpty()) {
-            QFileInfo fi(filePath);
-            FileDisposalSequence::instance()->start(shijimaParent(), fi.fileName(), filePath);
-        }
-    });
+    {
+        QPointer<ShijimaWidget> petPtr = shijimaParent();
+        action = addAction("🕳️ 黑洞吞噬本地文件...");
+        connect(action, &QAction::triggered, [petPtr](){
+            if (!petPtr) return;
+            QString filePath = QFileDialog::getOpenFileName(
+                nullptr,
+                "选择要让桌宠推入黑洞吞噬的文件",
+                QDir::homePath() + "/Desktop",
+                "所有文件 (*.*)"
+            );
+            if (!filePath.isEmpty() && petPtr) {
+                QFileInfo fi(filePath);
+                FileDisposalSequence::instance()->start(petPtr.data(), fi.fileName(), filePath);
+            }
+        });
+    }
 
     // AI Settings Dialog
-    action = addAction("⚙️ AI 模型与记忆配置");
-    connect(action, &QAction::triggered, [this](){
-        shijimaParent()->showAgentSettings();
-    });
+    {
+        QPointer<ShijimaWidget> petPtr = shijimaParent();
+        action = addAction("⚙️ AI 模型与记忆配置");
+        connect(action, &QAction::triggered, [petPtr](){
+            if (petPtr) {
+                petPtr->showAgentSettings();
+            }
+        });
+    }
 
     // Check for Updates
     action = addAction("🔄 检查更新...");

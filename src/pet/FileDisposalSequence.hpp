@@ -4,6 +4,7 @@
 #include <QString>
 #include <QPointF>
 #include <QTimer>
+#include <QPointer>
 
 class ShijimaWidget;
 class FloatingFileWidget;
@@ -26,9 +27,9 @@ private:
     void finish();
 
     bool m_running = false;
-    ShijimaWidget *m_pet = nullptr;
-    FloatingFileWidget *m_fileWidget = nullptr;
-    TrashTargetWidget *m_trashWidget = nullptr;
+    QPointer<ShijimaWidget> m_pet;
+    QPointer<FloatingFileWidget> m_fileWidget;
+    QPointer<TrashTargetWidget> m_trashWidget;
     QString m_fileName;
     QString m_realFilePath;
 

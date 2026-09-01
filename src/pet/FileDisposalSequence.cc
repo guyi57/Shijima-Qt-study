@@ -183,9 +183,11 @@ void FileDisposalSequence::step() {
     }
 
     // 核心保证：每一帧都推进底层动画、真实平移窗口坐标并重绘
-    m_pet->mascot().tick();
-    m_pet->updateOffsets();
-    m_pet->repaint();
+    if (m_pet) {
+        m_pet->mascot().tick();
+        m_pet->updateOffsets();
+        m_pet->repaint();
+    }
 }
 
 void FileDisposalSequence::finish() {

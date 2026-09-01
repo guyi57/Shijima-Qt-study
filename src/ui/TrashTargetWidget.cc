@@ -22,7 +22,7 @@ TrashTargetWidget::TrashTargetWidget(QWidget *parent)
     setWindowFlags(Qt::ToolTip | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::WindowDoesNotAcceptFocus);
 
     Platform::setupFloatingBubbleWindow(this);
-    resize(340, 220);
+    resize(480, 300);
 
     // 加载嵌入的超清卡冈图雅黑洞资产
     m_gargantuaPixmap.loadFromData(blackhole_gargantua_png, blackhole_gargantua_png_len);
@@ -35,7 +35,7 @@ void TrashTargetWidget::initParticles() {
     for (int i = 0; i < 32; ++i) {
         Particle p;
         p.angle = (i * 11.25) * M_PI / 180.0;
-        p.radius = 35.0 + (QRandomGenerator::global()->bounded(75));
+        p.radius = 30.0 + (QRandomGenerator::global()->bounded(60));
         p.speed = 0.035 + (QRandomGenerator::global()->bounded(30) / 1000.0);
         p.size = 1.5 + (QRandomGenerator::global()->bounded(3));
         int colorType = i % 4;
@@ -77,7 +77,7 @@ void TrashTargetWidget::showAt(const QPointF &pos) {
             p.angle += p.speed * (m_absorbing ? 3.0 : 1.0);
             p.radius -= (m_absorbing ? 1.2 : 0.22);
             if (p.radius < 15.0) {
-                p.radius = 95.0 + (QRandomGenerator::global()->bounded(20));
+                p.radius = 85.0 + (QRandomGenerator::global()->bounded(15));
             }
         }
 
@@ -109,7 +109,7 @@ void TrashTargetWidget::showAt(const QPointF &pos) {
 void TrashTargetWidget::playAbsorbEffect() {
     m_absorbing = true;
     m_absorbProgress = 0.0;
-    m_scale = 1.35;
+    m_scale = 1.30;
     update();
 }
 
@@ -129,8 +129,8 @@ void TrashTargetWidget::paintEvent(QPaintEvent *) {
     painter.scale(m_scale, m_scale);
     painter.setOpacity(m_opacity);
 
-    // 1. 卡冈图雅外层引力透镜弯曲光晕 (Gravitational Lensing Corona Halo)
-    double glowSize = 135.0 + 8.0 * std::sin(m_glowPhase);
+    // 1. 卡冈图雅外层引力透镜弯曲光晕 (Gravitational Lensing Corona Halo，完美留足安全边距)
+    double glowSize = 110.0 + 6.0 * std::sin(m_glowPhase);
     QRadialGradient outerGlow(0, 0, glowSize);
     outerGlow.setColorAt(0.0, QColor(254, 240, 138, m_absorbing ? 220 : 140));
     outerGlow.setColorAt(0.28, QColor(245, 158, 11, m_absorbing ? 160 : 90));
@@ -142,8 +142,8 @@ void TrashTargetWidget::paintEvent(QPaintEvent *) {
 
     // 2. 绘制高清《星际穿越》卡冈图雅黑洞本体 (Gargantua Ultra-HD Texture，完全不裁剪)
     if (!m_gargantuaPixmap.isNull()) {
-        int imgW = 280;
-        int imgH = static_cast<int>(imgW * (560.0 / 880.0)); // 保持 1.57:1 黄金比例 (约 178px)
+        int imgW = 240;
+        int imgH = static_cast<int>(imgW * (560.0 / 880.0)); // 保持 1.57:1 黄金比例 (约 152px)
         QRectF drawRect(-imgW / 2.0, -imgH / 2.0, imgW, imgH);
         painter.drawPixmap(drawRect.toRect(), m_gargantuaPixmap);
     }

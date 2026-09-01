@@ -1,4 +1,5 @@
 #include "TrashTargetWidget.hpp"
+#include "BlackHoleAsset.hpp"
 #include "Platform/Platform.hpp"
 #include <QPainter>
 #include <QPainterPath>
@@ -17,22 +18,27 @@ TrashTargetWidget::TrashTargetWidget(QWidget *parent)
     setWindowFlags(Qt::ToolTip | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::WindowDoesNotAcceptFocus);
 
     Platform::setupFloatingBubbleWindow(this);
-    resize(140, 140);
+    resize(240, 160);
+
+    // 加载嵌入的超清卡冈图雅黑洞资产
+    m_gargantuaPixmap.loadFromData(blackhole_gargantua_png, blackhole_gargantua_png_len);
+
     initParticles();
 }
 
 void TrashTargetWidget::initParticles() {
     m_particles.clear();
-    for (int i = 0; i < 24; ++i) {
+    for (int i = 0; i < 28; ++i) {
         Particle p;
-        p.angle = (i * 15.0) * M_PI / 180.0;
-        p.radius = 20.0 + (QRandomGenerator::global()->bounded(35));
-        p.speed = 0.04 + (QRandomGenerator::global()->bounded(30) / 1000.0);
-        p.size = 2.0 + (QRandomGenerator::global()->bounded(3));
-        int colorType = i % 3;
-        if (colorType == 0) p.color = QColor(168, 85, 247, 220); // Neon purple
-        else if (colorType == 1) p.color = QColor(99, 102, 241, 220); // Electric indigo
-        else p.color = QColor(236, 72, 153, 220); // Hot pink
+        p.angle = (i * 12.8) * M_PI / 180.0;
+        p.radius = 28.0 + (QRandomGenerator::global()->bounded(55));
+        p.speed = 0.035 + (QRandomGenerator::global()->bounded(30) / 1000.0);
+        p.size = 1.5 + (QRandomGenerator::global()->bounded(3));
+        int colorType = i % 4;
+        if (colorType == 0) p.color = QColor(254, 240, 138, 230); // Bright gold
+        else if (colorType == 1) p.color = QColor(245, 158, 11, 230); // Molten amber
+        else if (colorType == 2) p.color = QColor(255, 255, 255, 240); // Pure photon white
+        else p.color = QColor(236, 72, 153, 200); // Hot accretion pink
         m_particles.append(p);
     }
 }
@@ -44,6 +50,7 @@ void TrashTargetWidget::showAt(const QPointF &pos) {
     m_targetScale = 1.0;
     m_absorbing = false;
     m_rotationAngle = 0.0;
+    m_glowPhase = 0.0;
     show();
     raise();
 
@@ -54,15 +61,16 @@ void TrashTargetWidget::showAt(const QPointF &pos) {
 
     m_animTimer = new QTimer(this);
     connect(m_animTimer, &QTimer::timeout, [this]() {
-        m_rotationAngle += 4.5;
+        m_glowPhase += 0.08;
+        m_rotationAngle += 3.5;
         if (m_rotationAngle >= 360.0) m_rotationAngle -= 360.0;
 
         // 推进吸入粒子轨道
         for (auto &p : m_particles) {
-            p.angle += p.speed * (m_absorbing ? 2.5 : 1.0);
-            p.radius -= (m_absorbing ? 0.8 : 0.15);
-            if (p.radius < 8.0) {
-                p.radius = 50.0 + (QRandomGenerator::global()->bounded(10));
+            p.angle += p.speed * (m_absorbing ? 3.0 : 1.0);
+            p.radius -= (m_absorbing ? 1.0 : 0.18);
+            if (p.radius < 12.0) {
+                p.radius = 70.0 + (QRandomGenerator::global()->bounded(15));
             }
         }
 
@@ -74,10 +82,10 @@ void TrashTargetWidget::showAt(const QPointF &pos) {
             }
         } else {
             m_absorbProgress += 0.05;
-            if (m_absorbProgress < 0.4) {
-                m_scale += 0.06; // 吞噬瞬间剧烈膨胀
+            if (m_absorbProgress < 0.35) {
+                m_scale += 0.08; // 吞噬瞬间剧烈黄金辉光膨胀
             } else {
-                m_scale -= 0.12; // 然后急剧坍缩
+                m_scale -= 0.14; // 然后急剧坍缩入奇点
                 m_opacity -= 0.10;
                 if (m_scale <= 0.05 || m_opacity <= 0.0) {
                     m_animTimer->stop();
@@ -106,7 +114,7 @@ void TrashTargetWidget::dismiss() {
 void TrashTargetWidget::paintEvent(QPaintEvent *) {
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
-    painter.setRenderHint(QPainter::TextAntialiasing);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform);
 
     painter.save();
     QPointF center(width() / 2.0, height() / 2.0);
@@ -114,58 +122,38 @@ void TrashTargetWidget::paintEvent(QPaintEvent *) {
     painter.scale(m_scale, m_scale);
     painter.setOpacity(m_opacity);
 
-    // 1. 引力透镜光晕底晕 (Gravitational Lensing Glow)
-    double maxRadius = 58.0;
-    QRadialGradient outerGlow(0, 0, maxRadius);
-    outerGlow.setColorAt(0.0, QColor(147, 51, 234, 180));
-    outerGlow.setColorAt(0.5, QColor(79, 70, 229, 120));
-    outerGlow.setColorAt(0.85, QColor(15, 23, 42, 60));
+    // 1. 卡冈图雅黄金吸积盘辉光底晕 (Accretion Disc Ambient Corona Glow)
+    double glowSize = 95.0 + 5.0 * std::sin(m_glowPhase);
+    QRadialGradient outerGlow(0, 0, glowSize);
+    outerGlow.setColorAt(0.0, QColor(254, 240, 138, m_absorbing ? 230 : 160));
+    outerGlow.setColorAt(0.35, QColor(245, 158, 11, m_absorbing ? 180 : 110));
+    outerGlow.setColorAt(0.7, QColor(180, 83, 9, 50));
     outerGlow.setColorAt(1.0, QColor(0, 0, 0, 0));
     painter.setBrush(outerGlow);
     painter.setPen(Qt::NoPen);
-    painter.drawEllipse(QPointF(0, 0), maxRadius, maxRadius);
+    painter.drawEllipse(QPointF(0, 0), glowSize, glowSize * 0.7);
 
-    // 2. 旋转吸积盘涡流 (Rotating Accretion Disk Vortex)
-    painter.save();
-    painter.rotate(m_rotationAngle);
-
-    for (int i = 0; i < 3; ++i) {
-        painter.rotate(120.0);
-        QLinearGradient diskGrad(-45, -10, 45, 10);
-        diskGrad.setColorAt(0.0, QColor(236, 72, 153, 0));
-        diskGrad.setColorAt(0.3, QColor(168, 85, 247, 210));
-        diskGrad.setColorAt(0.7, QColor(99, 102, 241, 210));
-        diskGrad.setColorAt(1.0, QColor(56, 189, 248, 0));
-
-        painter.setBrush(diskGrad);
-        painter.drawEllipse(QRectF(-48, -12, 96, 24));
+    // 2. 绘制高清《星际穿越》卡冈图雅黑洞本体 (Gargantua Ultra-HD Texture)
+    if (!m_gargantuaPixmap.isNull()) {
+        int imgW = 210;
+        int imgH = static_cast<int>(imgW * (560.0 / 880.0)); // 保持 1.57:1 比例
+        QRectF drawRect(-imgW / 2.0, -imgH / 2.0, imgW, imgH);
+        painter.drawPixmap(drawRect.toRect(), m_gargantuaPixmap);
     }
-    painter.restore();
 
-    // 3. 绘制围绕吸入的暗物质与发光粒子
+    // 3. 动态绘制围绕吸入的黄金与星光光子粒子 (Orbiting Photon Particles)
     for (const auto &p : m_particles) {
         double px = p.radius * std::cos(p.angle);
-        double py = (p.radius * 0.65) * std::sin(p.angle);
+        double py = (p.radius * 0.42) * std::sin(p.angle); // 椭圆吸积盘倾角
         painter.setBrush(p.color);
         painter.drawEllipse(QPointF(px, py), p.size, p.size);
     }
 
-    // 4. 事件视界极黑核心 (Event Horizon Void Core)
-    double coreRadius = 22.0;
-    QRadialGradient coreGrad(0, 0, coreRadius);
-    coreGrad.setColorAt(0.0, QColor(0, 0, 0, 255));
-    coreGrad.setColorAt(0.75, QColor(10, 10, 18, 255));
-    coreGrad.setColorAt(0.92, QColor(126, 34, 206, 240));
-    coreGrad.setColorAt(1.0, QColor(192, 132, 252, 255));
-
-    painter.setBrush(coreGrad);
-    painter.setPen(QPen(QColor(216, 180, 254, 200), 1.5));
-    painter.drawEllipse(QPointF(0, 0), coreRadius, coreRadius);
-
-    // 5. 奇点微光与中心粒子
-    painter.setBrush(QColor(255, 255, 255, 220));
-    painter.setPen(Qt::NoPen);
-    painter.drawEllipse(QPointF(0, 0), 2.5, 2.5);
+    // 4. 事件视界中心深空奇点微光
+    if (m_absorbing) {
+        painter.setBrush(QColor(255, 255, 255, 240));
+        painter.drawEllipse(QPointF(0, 0), 4.0, 4.0);
+    }
 
     painter.restore();
 }

@@ -5,6 +5,8 @@
 #include <QTimer>
 #include <QVector>
 
+#include <QPixmap>
+
 class TrashTargetWidget : public QWidget {
 public:
     explicit TrashTargetWidget(QWidget *parent = nullptr);
@@ -22,9 +24,11 @@ private:
     double m_scale = 0.2;
     double m_targetScale = 1.0;
     double m_rotationAngle = 0.0;
+    double m_glowPhase = 0.0;
     bool m_absorbing = false;
     double m_absorbProgress = 0.0;
     QTimer *m_animTimer = nullptr;
+    QPixmap m_gargantuaPixmap;
 
     struct Particle {
         double angle;

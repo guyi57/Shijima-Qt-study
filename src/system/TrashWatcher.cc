@@ -114,67 +114,66 @@ void TrashWatcher::onDirectoryChanged(const QString &path) {
 void TrashWatcher::onNativeFileEvent(const QString &filePath) {
     if (!m_enabled) return;
 
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
+    // 1. 全局 3.5 秒冷却防抖（黑洞处置动画完整周期约 3 秒）
+    if (now - m_lastTriggerTime < 3500) {
+        return;
+    }
+
+    if (FileDisposalSequence::instance()->isRunning()) {
+        return;
+    }
+
+    QString targetFileName;
+
     QFileInfo fi(filePath);
     QString filename = fi.fileName();
 
-    // 1. 如果内核直接报告了被移入废纸篓的具体文件
-    if (!filename.isEmpty() && filename != ".Trash" && filename != ".DS_Store") {
+    // 1. 如果事件直接提供了具体文件名（且不是根目录）
+    if (!filename.isEmpty() && filename != ".Trash" && filename != "$Recycle.Bin" && filename != "files" && filename != ".DS_Store") {
         if (!m_knownFiles.contains(filename)) {
             m_knownFiles.insert(filename);
-
-            qint64 now = QDateTime::currentMSecsSinceEpoch();
-            if (now - m_lastTriggerTime < 2000) return;
-            m_lastTriggerTime = now;
-
-            std::cout << "[TrashWatcher] macOS FSEvents 零轮询捕获到文件移入废纸篓: "
-                      << filename.toStdString() << std::endl;
-
-            QTimer::singleShot(0, [filename]() {
-                auto manager = ShijimaManager::defaultManager();
-                if (!manager) return;
-                auto &mascots = manager->mascots();
-                if (!mascots.empty() && !FileDisposalSequence::instance()->isRunning()) {
-                    FileDisposalSequence::instance()->start(mascots.front(), filename, "", QCursor::pos());
-                }
-            });
-            return;
+            targetFileName = filename;
         }
     }
 
-    // 2. 否则只在收到系统内核通知时做一次增量快照比对
-    QDir trashDir(m_trashPath);
-    if (!trashDir.exists()) return;
+    // 2. 如果尚未确定具体文件，对废纸篓做增量比对
+    if (targetFileName.isEmpty()) {
+        QDir trashDir(m_trashPath);
+        if (!trashDir.exists()) return;
 
-    QStringList currentEntries = trashDir.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
-    QSet<QString> currentSet;
-    for (const auto &e : currentEntries) {
-        if (e != ".DS_Store") {
-            currentSet.insert(e);
+        QStringList currentEntries = trashDir.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
+        QSet<QString> currentSet;
+        for (const auto &e : currentEntries) {
+            if (e != ".DS_Store") {
+                currentSet.insert(e);
+            }
         }
+
+        QSet<QString> newFiles = currentSet - m_knownFiles;
+        m_knownFiles = currentSet;
+
+        if (newFiles.isEmpty()) return;
+        targetFileName = *newFiles.begin();
+    } else {
+        // 同步刷新快照
+        updateSnapshot();
     }
 
-    QSet<QString> newFiles = currentSet - m_knownFiles;
-    m_knownFiles = currentSet;
+    if (targetFileName.isEmpty()) return;
 
-    if (newFiles.isEmpty()) return;
-
-    qint64 now = QDateTime::currentMSecsSinceEpoch();
-    if (now - m_lastTriggerTime < 2000) {
-        return;
-    }
     m_lastTriggerTime = now;
 
-    QString latestDeletedFile = *newFiles.begin();
-    std::cout << "[TrashWatcher] macOS FSEvents 零轮询捕获到文件移入废纸篓: "
-              << latestDeletedFile.toStdString() << std::endl;
+    std::cout << "[TrashWatcher] 零轮询捕获到文件移入废纸篓/回收站: "
+              << targetFileName.toStdString() << std::endl;
 
-    // 确保在 Qt GUI 主线程触发黑洞吞噬与爬行推文件动画
-    QTimer::singleShot(0, [latestDeletedFile]() {
+    // 确保在 Qt GUI 主线程触发单次黑洞吞噬与飞踢动画
+    QTimer::singleShot(0, [targetFileName]() {
         auto manager = ShijimaManager::defaultManager();
         if (!manager) return;
         auto &mascots = manager->mascots();
         if (!mascots.empty() && !FileDisposalSequence::instance()->isRunning()) {
-            FileDisposalSequence::instance()->start(mascots.front(), latestDeletedFile, "", QCursor::pos());
+            FileDisposalSequence::instance()->start(mascots.front(), targetFileName, "", QCursor::pos());
         }
     });
 }

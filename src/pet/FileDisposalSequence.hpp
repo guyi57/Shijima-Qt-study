@@ -27,6 +27,7 @@ private:
     void finish();
 
     bool m_running = false;
+    qint64 m_lastStartTime = 0;
     QPointer<ShijimaWidget> m_pet;
     QPointer<FloatingFileWidget> m_fileWidget;
     QPointer<TrashTargetWidget> m_trashWidget;

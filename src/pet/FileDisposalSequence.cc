@@ -29,6 +29,12 @@ FileDisposalSequence::~FileDisposalSequence() {
 void FileDisposalSequence::start(ShijimaWidget *pet, const QString &fileName, const QString &realFilePath, const QPointF &customSpawnPos) {
     if (!pet || m_running) return;
 
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (now - m_lastStartTime < 3500) {
+        return; // 3.5秒防重复启动
+    }
+    m_lastStartTime = now;
+
     m_pet = pet;
     m_fileName = fileName.isEmpty() ? "cache_trash.tmp" : fileName;
     m_realFilePath = realFilePath;

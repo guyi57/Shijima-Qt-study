@@ -36,6 +36,7 @@ SOURCES = src/main.cc \
 	src/pet/BehaviorEngine.cc \
 	src/pet/ReactionEngine.cc \
 	src/pet/InitiativeTrigger.cc \
+	src/pet/FileDisposalSequence.cc \
 	src/agent/AgentService.cc \
 	src/agent/AipyAdapter.cc \
 	src/agent/PersonaManager.cc \
@@ -50,6 +51,7 @@ SOURCES = src/main.cc \
 	src/timer/TimerManager.cc \
 	src/timer/TimerListDialog.cc \
 	$(PLATFORM_SYSTEM_SOURCES) \
+	src/ui/FloatingFileWidget.cc \
 	src/ui/MessageBubble.cc \
 	src/ui/ScoreBadgeWidget.cc \
 	src/ui/PetStatusBarWidget.cc \

@@ -1161,6 +1161,16 @@ void ShijimaWidget::hideMessage() {
     }
 }
 
+bool ShijimaWidget::trySetBehavior(const std::string &name) {
+    if (!m_mascot) return false;
+    auto b = m_mascot->initial_behavior_list().find(name, false);
+    if (b != nullptr) {
+        m_mascot->next_behavior(name);
+        return true;
+    }
+    return false;
+}
+
 void ShijimaWidget::doAction(const PetActionCommand &cmd) {
     if (!m_mascot || !m_mascot->state) return;
 
@@ -1174,15 +1184,6 @@ void ShijimaWidget::doAction(const PetActionCommand &cmd) {
     }
 
     // 2. 根据动作类型调度底层 Behavior
-    auto trySetBehavior = [this](const std::string &name) -> bool {
-        auto b = m_mascot->initial_behavior_list().find(name, false);
-        if (b != nullptr) {
-            m_mascot->next_behavior(name);
-            return true;
-        }
-        return false;
-    };
-
     switch (cmd.type) {
         case PetActionType::Idle:
             if (!trySetBehavior("SitAndFaceMouse")) {

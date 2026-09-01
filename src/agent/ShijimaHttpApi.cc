@@ -23,6 +23,7 @@
 #include "PetEventBus.hpp"
 #include "PetAction.hpp"
 #include "AgentService.hpp"
+#include "FileDisposalSequence.hpp"
 #include "PersonaManager.hpp"
 #include <thread>
 #include <iostream>
@@ -521,6 +522,40 @@ ShijimaHttpApi::ShijimaHttpApi(ShijimaManager *manager): m_server(new Server),
     m_server->Post("/api/v1/broadcast", handleActionRequest);
     m_server->Post("/api/pet/action", handleActionRequest);
     m_server->Post("/api/actions", handleActionRequest);
+
+    // 触发桌宠搬运并删除文件动画
+    auto handleTrashFileRequest = [this](const Request &req, Response &res) {
+        QJsonObject responseObj;
+        QString fileName = "cache_garbage.tmp";
+        if (!req.body.empty()) {
+            auto doc = QJsonDocument::fromJson(QByteArray(req.body.c_str(), req.body.size()));
+            if (doc.isObject()) {
+                auto obj = doc.object();
+                if (obj.contains("filename")) {
+                    fileName = obj["filename"].toString();
+                }
+            }
+        }
+        if (req.has_param("filename")) {
+            fileName = QString::fromStdString(req.get_param_value("filename"));
+        }
+
+        m_manager->onTickSync([fileName](ShijimaManager *manager) {
+            auto &list = manager->mascots();
+            if (!list.empty()) {
+                FileDisposalSequence::instance()->start(list.front(), fileName);
+            }
+        });
+
+        responseObj["success"] = true;
+        responseObj["message"] = "File disposal sequence triggered";
+        responseObj["filename"] = fileName;
+        sendJson(res, responseObj);
+    };
+
+    m_server->Post("/guyi/api/v1/trash_file", handleTrashFileRequest);
+    m_server->Get("/guyi/api/v1/trash_file", handleTrashFileRequest);
+    m_server->Post("/api/pet/trash_file", handleTrashFileRequest);
 
     // 接收 Coding Agent 状态感知（生命周期、动作与播报）
     auto handleStatusRequest = [](const Request &req, Response &res) {

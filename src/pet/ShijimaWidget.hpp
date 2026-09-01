@@ -48,6 +48,7 @@ class ShijimaWidget : public PlatformWidget<QWidget>
 {
 public:
     friend class ShijimaContextMenu;
+    friend class FileDisposalSequence;
     explicit ShijimaWidget(MascotData *mascotData,
         std::unique_ptr<shijima::mascot::manager> mascot,
         int mascotId, bool windowedMode, QWidget *parent = nullptr);
@@ -82,6 +83,7 @@ public:
 
     // 执行高阶动作指令
     void doAction(const PetActionCommand &cmd);
+    bool trySetBehavior(const std::string &name);
 
     // 查询当前行为与导航至角落
     QString currentBehaviorName() const;

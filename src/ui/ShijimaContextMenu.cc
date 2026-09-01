@@ -21,6 +21,7 @@
 #include "ShijimaManager.hpp"
 #include "BehaviorEngine.hpp"
 #include "MusicPlayerDialog.hpp"
+#include "FileDisposalSequence.hpp"
 #include <QMap>
 
 // 行为名称中文翻译映射表
@@ -199,6 +200,12 @@ ShijimaContextMenu::ShijimaContextMenu(ShijimaWidget *parent)
     action = addAction("🎵 音乐工坊 (⌥M)");
     connect(action, &QAction::triggered, [](){
         MusicPlayerDialog::instance()->toggleVisibility();
+    });
+
+    // File Disposal Animation Demo
+    action = addAction("🗑️ 模拟搬运删除文件");
+    connect(action, &QAction::triggered, [this](){
+        FileDisposalSequence::instance()->start(shijimaParent(), "cache_log.tmp");
     });
 
     // AI Settings Dialog

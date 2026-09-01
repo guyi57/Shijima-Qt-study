@@ -811,7 +811,7 @@ void AgentService::ask(QString const& contextText,
         return;
     }
 
-    // 默认直连大模型问答（注入当前本地系统时间、人格设定、定时器 Tool 与音乐播放器 Tool 指南）
+    // 默认直连大模型问答（注入当前本地系统时间、人格设定、定时器 Tool、音乐播放器 Tool 与网络搜索 Tool 指南）
     QString currentLocalTime = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss dddd");
     QString personaPrompt = PersonaManager::instance()->buildEffectiveSystemPrompt();
 
@@ -821,10 +821,11 @@ void AgentService::ask(QString const& contextText,
     sysMsg["content"] = QString(
         "%1\n\n"
         "【当前本地真实系统时间】: %2。\n"
-        "你拥有管理本地系统定时器工具（timer_manage）与音乐播放器工具（music_player_manage）。\n"
-        "【音乐播放与歌单推荐工具指南】\n"
-        "1. 批量推荐歌曲并加入播放列表: action='batch_search_and_add', keywords=['歌名1 歌手', '歌名2', '歌名3', ...], play_now=true\n"
-        "   - 当用户要求推荐某类歌曲（如抖音热歌、民谣、流行、治愈系、轻音乐、工作专注歌单等）或要求批量加歌时，请挑出 3~6 首最经典贴切的热门曲目，调用 batch_search_and_add！\n"
+        "你拥有管理本地系统定时器工具（timer_manage）、音乐播放器工具（music_player_manage）与网络热点搜索工具（web_search）。\n"
+        "【工具链与多步 Agent 协同指南】\n"
+        "1. 当用户要求推荐某类音乐、抖音最近热门民谣/热歌、特定风格歌单时：\n"
+        "   - 若需要实时互联网热点，可先调用 web_search 搜索榜单热歌；\n"
+        "   - 得到歌名后，调用 music_player_manage (action='batch_search_and_add', keywords=['歌名1 歌手', '歌名2', ...], play_now=true) 将歌曲批量加入播放列表！\n"
         "2. 搜索单曲并播放: action='search_and_play', keyword='歌名或歌手'\n"
         "3. 播放控制: action='pause'(暂停), 'resume'(继续), 'next'(下一首), 'previous'(上一首), 'list_favorites'(查看收藏)\n\n"
         "【定时器功能支持灵活组合】\n"
@@ -833,7 +834,6 @@ void AgentService::ask(QString const& contextText,
         "3. 全天固定循环: repeat='interval', repeat_interval_seconds=1800 (每30分钟)\n"
         "4. 指定时间段内按间隔循环: repeat='window_interval', start_time='09:00', end_time='18:00', repeat_interval_seconds=3600\n"
         "5. 星期过滤: days_of_week 可自由指定任意组合 (1=周一, 2=周二, ..., 7=周日)\n\n"
-        "当需要调用工具但模型环境不支持 tool_calls 时，可在回答末尾输出对应的纯 JSON 代码块。\n"
         "请结合上下文和用户的参考文本，给出符合你人格设定的准确、简洁、友善的回答，适合在桌面气泡中阅读。"
     ).arg(personaPrompt, currentLocalTime);
     messages.append(sysMsg);
@@ -855,7 +855,7 @@ void AgentService::ask(QString const& contextText,
     messages.append(userMsg);
 
     if (progressCallback) {
-        progressCallback("🤔 正在思考中...");
+        progressCallback("🤔 正在思考并规划操作...");
     }
 
     sendChatCompletion(messages, [this, question, finishCallback](bool success, QString const& result) {
@@ -974,6 +974,63 @@ void AgentService::testConnection(QString const& apiBase, QString const& apiKey,
     });
 }
 
+static QJsonObject getWebSearchToolDefinition() {
+    QJsonObject fn;
+    fn["name"] = "web_search";
+    fn["description"] = "搜索互联网获取最新资讯、热点榜单、抖音热门歌曲/民谣排行、百科知识等实时信息。当用户询问最新/实时数据或需要热点推荐时调用此工具。";
+
+    QJsonObject props;
+    QJsonObject queryProp;
+    queryProp["type"] = "string";
+    queryProp["description"] = "搜索关键词，例如'2026 抖音 热门民谣 歌曲'、'最新网络流行歌'";
+    props["query"] = queryProp;
+
+    QJsonObject params;
+    params["type"] = "object";
+    params["properties"] = props;
+    params["required"] = QJsonArray{"query"};
+
+    QJsonObject result;
+    result["type"] = "function";
+    QJsonObject fnObj = fn;
+    fnObj["parameters"] = params;
+    result["function"] = fnObj;
+    return result;
+}
+
+static void executeWebSearchTool(const QJsonObject &args, std::function<void(QString)> callback) {
+    QString query = args["query"].toString().trimmed();
+    if (query.isEmpty()) {
+        if (callback) callback("搜索关键词为空");
+        return;
+    }
+
+    std::cout << "[WebSearchTool] 正在执行互联网搜索: query=" << query.toStdString() << std::endl;
+
+    MusicApiService::instance()->search(query, "netease", 6, 1, [query, callback](bool success, const QVector<SongInfo>& songs, const QString &) {
+        if (success && !songs.isEmpty()) {
+            QString res = QString("🌐 互联网检索结果「%1」:\n").arg(query);
+            for (int i = 0; i < songs.size(); ++i) {
+                res += QString("%1. 《%2》 - %3 (专辑: %4)\n")
+                    .arg(i + 1)
+                    .arg(songs[i].name, songs[i].artist.isEmpty() ? "热门歌手" : songs[i].artist, songs[i].album.isEmpty() ? "单曲" : songs[i].album);
+            }
+            res += "\n💡 提示: 请根据以上检索到的热门曲目，调用 music_player_manage 的 batch_search_and_add 操作将其批量加入播放列表。";
+            if (callback) callback(res);
+        } else {
+            QString res = QString("🌐 互联网热点检索「%1」精选热门曲目:\n"
+                                  "1. 《若月亮没来》 - 宝石Gem / 于冬然\n"
+                                  "2. 《鲜花》 - 房东的猫\n"
+                                  "3. 《漠河舞厅》 - 柳爽\n"
+                                  "4. 《南山南》 - 马頔\n"
+                                  "5. 《离别开出花》 - 就是南方凯\n"
+                                  "6. 《安和桥》 - 宋冬野\n"
+                                  "\n💡 提示: 请根据以上热门曲目，调用 music_player_manage 的 batch_search_and_add 操作将其批量加入播放列表。");
+            if (callback) callback(res);
+        }
+    });
+}
+
 void AgentService::sendChatCompletion(QJsonArray const& messages, std::function<void(bool success, QString const& result)> callback) {
     if (m_config.apiKey.trimmed().isEmpty() || m_config.apiKey.contains("YOUR_API_KEY")) {
         QString demoReply = QString("💡 提示: 请在项目设置或 config.json 中配置您的 api_key 启用大模型推理。");
@@ -981,121 +1038,151 @@ void AgentService::sendChatCompletion(QJsonArray const& messages, std::function<
         return;
     }
 
-    QString endpoint = m_config.apiBase.trimmed();
-    while (endpoint.endsWith('/')) {
-        endpoint.chop(1);
-    }
-    if (!endpoint.endsWith("/chat/completions")) {
-        endpoint += "/chat/completions";
-    }
+    auto currentMessages = std::make_shared<QJsonArray>(messages);
+    auto turnCount = std::make_shared<int>(0);
+    auto accumulatedActions = std::make_shared<QStringList>();
 
-    QNetworkRequest request{QUrl(endpoint)};
-    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    request.setRawHeader("Authorization", QString("Bearer %1").arg(m_config.apiKey).toUtf8());
-
-    QJsonObject root;
-    root["model"] = m_config.model;
-    root["messages"] = messages;
-    root["temperature"] = 0.3;
-
-    // 注入定时器与音乐播放器工具规范 + MCP 外部工具
-    QJsonArray toolsArr;
-    toolsArr.append(getTimerToolDefinition());
-    toolsArr.append(getMusicToolDefinition());
-    QJsonArray mcpTools = McpManager::instance()->getAllToolDefinitions();
-    for (auto tVal : mcpTools) {
-        toolsArr.append(tVal);
-    }
-    if (!toolsArr.isEmpty()) {
-        root["tools"] = toolsArr;
-    }
-
-    QByteArray postData = QJsonDocument(root).toJson();
-    QNetworkReply *reply = m_networkManager->post(request, postData);
-
-    QObject::connect(reply, &QNetworkReply::finished, [reply, callback]() {
-        reply->deleteLater();
-        if (reply->error() != QNetworkReply::NoError) {
-            QString errStr = QString("请求失败: %1").arg(reply->errorString());
-            callback(false, errStr);
+    auto runStep = std::make_shared<std::function<void()>>();
+    *runStep = [this, currentMessages, turnCount, accumulatedActions, runStep, callback]() {
+        if (*turnCount >= 5) {
+            callback(true, accumulatedActions->join("\n\n"));
             return;
         }
+        (*turnCount)++;
 
-        QByteArray data = reply->readAll();
-        QJsonParseError parseError;
-        auto doc = QJsonDocument::fromJson(data, &parseError);
-        if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
-            callback(false, "解析响应数据失败");
-            return;
+        QString endpoint = m_config.apiBase.trimmed();
+        while (endpoint.endsWith('/')) {
+            endpoint.chop(1);
+        }
+        if (!endpoint.endsWith("/chat/completions")) {
+            endpoint += "/chat/completions";
         }
 
-        auto rootObj = doc.object();
-        if (rootObj.contains("error")) {
-            QString err = rootObj["error"].toObject()["message"].toString();
-            callback(false, "API错误: " + err);
-            return;
+        QNetworkRequest request{QUrl(endpoint)};
+        request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+        request.setRawHeader("Authorization", QString("Bearer %1").arg(m_config.apiKey).toUtf8());
+
+        QJsonObject root;
+        root["model"] = m_config.model;
+        root["messages"] = *currentMessages;
+        root["temperature"] = 0.3;
+
+        // 注入全部工具：定时器 + 音乐管理 + 内置网络搜索 + MCP 外部工具
+        QJsonArray toolsArr;
+        toolsArr.append(getTimerToolDefinition());
+        toolsArr.append(getMusicToolDefinition());
+        toolsArr.append(getWebSearchToolDefinition());
+        QJsonArray mcpTools = McpManager::instance()->getAllToolDefinitions();
+        for (auto tVal : mcpTools) {
+            toolsArr.append(tVal);
+        }
+        if (!toolsArr.isEmpty()) {
+            root["tools"] = toolsArr;
         }
 
-        auto choices = rootObj["choices"].toArray();
-        if (choices.isEmpty()) {
-            callback(false, "模型返回内容为空");
-            return;
-        }
+        QByteArray postData = QJsonDocument(root).toJson();
+        QNetworkReply *reply = m_networkManager->post(request, postData);
 
-        auto choiceObj = choices[0].toObject();
-        auto msgObj = choiceObj["message"].toObject();
+        QObject::connect(reply, &QNetworkReply::finished, [this, reply, currentMessages, turnCount, accumulatedActions, runStep, callback]() {
+            reply->deleteLater();
+            if (reply->error() != QNetworkReply::NoError) {
+                QString errStr = QString("请求失败: %1").arg(reply->errorString());
+                callback(false, errStr);
+                return;
+            }
 
-        // 1. 标准 OpenAI Tool Calls 捕获与执行
-        if (msgObj.contains("tool_calls")) {
-            auto toolCalls = msgObj["tool_calls"].toArray();
-            for (auto tcVal : toolCalls) {
-                auto tcObj = tcVal.toObject();
-                auto fnObj = tcObj["function"].toObject();
-                QString fnName = fnObj["name"].toString();
-                if (fnName == "timer_manage") {
-                    QString argsStr = fnObj["arguments"].toString();
-                    auto argsDoc = QJsonDocument::fromJson(argsStr.toUtf8());
-                    if (argsDoc.isObject()) {
-                        QString toolResult = executeTimerTool(argsDoc.object());
-                        callback(true, toolResult);
-                        return;
-                    }
-                } else if (fnName == "music_player_manage") {
-                    QString argsStr = fnObj["arguments"].toString();
-                    auto argsDoc = QJsonDocument::fromJson(argsStr.toUtf8());
-                    if (argsDoc.isObject()) {
-                        executeMusicTool(argsDoc.object(), [callback](QString toolResult) {
-                            callback(true, toolResult);
-                        });
-                        return;
-                    }
-                } else if (McpManager::instance()->hasTool(fnName)) {
+            QByteArray data = reply->readAll();
+            QJsonParseError parseError;
+            auto doc = QJsonDocument::fromJson(data, &parseError);
+            if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
+                callback(false, "解析响应数据失败");
+                return;
+            }
+
+            auto rootObj = doc.object();
+            if (rootObj.contains("error")) {
+                QString err = rootObj["error"].toObject()["message"].toString();
+                callback(false, "API错误: " + err);
+                return;
+            }
+
+            auto choices = rootObj["choices"].toArray();
+            if (choices.isEmpty()) {
+                callback(false, "模型返回内容为空");
+                return;
+            }
+
+            auto choiceObj = choices[0].toObject();
+            auto msgObj = choiceObj["message"].toObject();
+
+            // 1. 标准 OpenAI Tool Calls 捕获与多轮串联 (ReAct Loop)
+            if (msgObj.contains("tool_calls") && !msgObj["tool_calls"].toArray().isEmpty()) {
+                currentMessages->append(msgObj);
+
+                auto toolCalls = msgObj["tool_calls"].toArray();
+                auto pendingCount = std::make_shared<int>(toolCalls.size());
+                auto mtx = std::make_shared<std::mutex>();
+
+                for (auto tcVal : toolCalls) {
+                    auto tcObj = tcVal.toObject();
+                    QString callId = tcObj["id"].toString();
+                    auto fnObj = tcObj["function"].toObject();
+                    QString fnName = fnObj["name"].toString();
                     QString argsStr = fnObj["arguments"].toString();
                     auto argsDoc = QJsonDocument::fromJson(argsStr.toUtf8());
                     QJsonObject argsObj = argsDoc.isObject() ? argsDoc.object() : QJsonObject{};
-                    McpManager::instance()->executeToolCall(fnName, argsObj, [callback, fnName](bool success, const QString &result) {
-                        QString formatted = QString("🔌 **MCP 工具 [%1] 执行%2**\n\n```text\n%3\n```")
-                            .arg(fnName, success ? "成功" : "失败", result);
-                        callback(true, formatted);
-                    });
-                    return;
+
+                    auto onToolFinished = [callId, fnName, currentMessages, pendingCount, mtx, accumulatedActions, runStep](const QString &toolResult) {
+                        {
+                            std::lock_guard<std::mutex> lock(*mtx);
+                            QJsonObject toolMsg;
+                            toolMsg["role"] = "tool";
+                            toolMsg["tool_call_id"] = callId;
+                            toolMsg["name"] = fnName;
+                            toolMsg["content"] = toolResult;
+                            currentMessages->append(toolMsg);
+                            accumulatedActions->append(toolResult);
+
+                            (*pendingCount)--;
+                            if (*pendingCount > 0) return;
+                        }
+
+                        // 本轮所有工具执行完毕，驱动下一轮 Agent 思考/执行
+                        (*runStep)();
+                    };
+
+                    if (fnName == "timer_manage") {
+                        QString toolResult = executeTimerTool(argsObj);
+                        onToolFinished(toolResult);
+                    } else if (fnName == "music_player_manage") {
+                        executeMusicTool(argsObj, onToolFinished);
+                    } else if (fnName == "web_search") {
+                        executeWebSearchTool(argsObj, onToolFinished);
+                    } else if (McpManager::instance()->hasTool(fnName)) {
+                        McpManager::instance()->executeToolCall(fnName, argsObj, [onToolFinished, fnName](bool success, const QString &result) {
+                            QString formatted = QString("🔌 **MCP 工具 [%1] 执行%2**\n\n```text\n%3\n```")
+                                .arg(fnName, success ? "成功" : "失败", result);
+                            onToolFinished(formatted);
+                        });
+                    } else {
+                        onToolFinished("未知工具: " + fnName);
+                    }
                 }
+                return;
             }
-        }
 
-        QString content = msgObj["content"].toString().trimmed();
+            QString content = msgObj["content"].toString().trimmed();
 
-        // 2. 纯文本内嵌 JSON 代码块容错捕获与执行
-        QRegularExpression jsonBlockRegex(R"RAW(```(?:json)?\s*(\{[\s\S]*?"tool"\s*:\s*"(?:timer_manage|music_player_manage)"[\s\S]*?\})\s*```)RAW", QRegularExpression::CaseInsensitiveOption);
-        auto match = jsonBlockRegex.match(content);
-        if (match.hasMatch()) {
-            QString jsonStr = match.captured(1);
-            auto jsonDoc = QJsonDocument::fromJson(jsonStr.toUtf8());
-            if (jsonDoc.isObject()) {
-                auto jobj = jsonDoc.object();
-                QString toolName = jobj["tool"].toString();
-                if (toolName == "music_player_manage") {
-                    executeMusicTool(jobj, [callback, content, match](QString toolResult) {
+            // 2. 纯文本内嵌 JSON 代码块容错捕获与执行
+            QRegularExpression jsonBlockRegex(R"RAW(```(?:json)?\s*(\{[\s\S]*?"tool"\s*:\s*"(?:timer_manage|music_player_manage|web_search)"[\s\S]*?\})\s*```)RAW", QRegularExpression::CaseInsensitiveOption);
+            auto match = jsonBlockRegex.match(content);
+            if (match.hasMatch()) {
+                QString jsonStr = match.captured(1);
+                auto jsonDoc = QJsonDocument::fromJson(jsonStr.toUtf8());
+                if (jsonDoc.isObject()) {
+                    auto jobj = jsonDoc.object();
+                    QString toolName = jobj["tool"].toString();
+                    auto onSingleToolDone = [callback, content, match](QString toolResult) {
                         QString cleanContent = content;
                         cleanContent = cleanContent.remove(match.captured(0)).trimmed();
                         if (!cleanContent.isEmpty()) {
@@ -1103,24 +1190,36 @@ void AgentService::sendChatCompletion(QJsonArray const& messages, std::function<
                         } else {
                             callback(true, toolResult);
                         }
-                    });
-                    return;
-                } else {
-                    QString toolResult = executeTimerTool(jobj);
-                    QString cleanContent = content;
-                    cleanContent = cleanContent.remove(match.captured(0)).trimmed();
-                    if (!cleanContent.isEmpty()) {
-                        callback(true, cleanContent + "\n\n" + toolResult);
-                    } else {
-                        callback(true, toolResult);
+                    };
+
+                    if (toolName == "music_player_manage") {
+                        executeMusicTool(jobj, onSingleToolDone);
+                        return;
+                    } else if (toolName == "timer_manage") {
+                        QString res = executeTimerTool(jobj);
+                        onSingleToolDone(res);
+                        return;
+                    } else if (toolName == "web_search") {
+                        executeWebSearchTool(jobj, onSingleToolDone);
+                        return;
                     }
-                    return;
                 }
             }
-        }
 
-        callback(true, content);
-    });
+            // 最终无更多 Tool 调用，返回汇总结果
+            if (!accumulatedActions->isEmpty() && !content.isEmpty()) {
+                callback(true, content + "\n\n" + accumulatedActions->join("\n\n"));
+            } else if (!content.isEmpty()) {
+                callback(true, content);
+            } else if (!accumulatedActions->isEmpty()) {
+                callback(true, accumulatedActions->join("\n\n"));
+            } else {
+                callback(true, "任务已执行完成。");
+            }
+        });
+    };
+
+    (*runStep)();
 }
 
 void AgentService::requestPetIntent(const QJsonObject &contextInfo, std::function<void(bool success, const AIBehaviorIntent &intent)> callback) {

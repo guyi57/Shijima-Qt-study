@@ -996,7 +996,7 @@ void ShijimaManager::updateEnvironment(QScreen *screen) {
     env->ceiling = { (double)geometry.top(), (double)geometry.left(),
         (double)geometry.right() };
     if (!windowedMode() && m_currentWindow.available &&
-        std::fabs(m_currentWindow.x) > 1 && std::fabs(m_currentWindow.y) > 1)
+        m_currentWindow.width > 80 && m_currentWindow.height > 80)
     {
         env->active_ie = { m_currentWindow.y,
             m_currentWindow.x + m_currentWindow.width,

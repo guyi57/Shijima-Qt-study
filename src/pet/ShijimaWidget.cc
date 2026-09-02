@@ -937,42 +937,48 @@ void ShijimaWidget::snapToNearestBorderOrWindow() {
 
     auto env = m_mascot->state->env;
     auto &anchor = m_mascot->state->anchor;
-    const double snapThreshold = 35.0; // 35 像素吸附容差
+    const double snapThreshold = 45.0; // 提升吸附容差
 
     // 1. 活跃窗口吸附（Active IE）
     if (env->active_ie.visible()) {
         auto &ie = env->active_ie;
 
-        // A. 靠近窗口顶部 (Top of IE) -> 站立在窗口顶沿
-        if (std::abs(anchor.y - ie.top) <= snapThreshold &&
-            anchor.x >= (ie.left - snapThreshold) && anchor.x <= (ie.right + snapThreshold)) {
+        // A. 靠近窗口顶部 (Top of IE) 或 释放在窗口上半部分 -> 稳稳立在窗口顶沿行走/坐下
+        bool nearTop = (anchor.y >= (ie.top - 60.0) && anchor.y <= (ie.top + 75.0));
+        bool insideUpperHalf = (anchor.y >= ie.top && anchor.y <= (ie.top + (ie.bottom - ie.top) * 0.45));
+        bool withinXRange = (anchor.x >= (ie.left - 30.0) && anchor.x <= (ie.right + 30.0));
+
+        if ((nearTop || insideUpperHalf) && withinXRange) {
             anchor.y = ie.top;
-            anchor.x = std::clamp(anchor.x, ie.left + 10.0, ie.right - 10.0);
+            anchor.x = std::clamp(anchor.x, ie.left + 15.0, ie.right - 15.0);
             m_mascot->next_behavior("WalkAlongIECeiling");
             updateOffsets();
             repaint();
+            std::cout << "[智能吸附] 成功将桌宠稳稳放置在活跃窗口顶部!" << std::endl;
             return;
         }
 
         // B. 靠近窗口左边缘 (Left Border of IE) -> 抓墙往上爬
-        if (std::abs(anchor.x - ie.left) <= snapThreshold &&
-            anchor.y >= (ie.top - snapThreshold) && anchor.y <= (ie.bottom + snapThreshold)) {
+        if (std::abs(anchor.x - ie.left) <= 45.0 &&
+            anchor.y >= (ie.top - 30.0) && anchor.y <= (ie.bottom + 30.0)) {
             anchor.x = ie.left;
             m_mascot->state->looking_right = false; // 朝向窗口
             m_mascot->next_behavior("ClimbAlongWall");
             updateOffsets();
             repaint();
+            std::cout << "[智能吸附] 成功吸附到活跃窗口左边缘!" << std::endl;
             return;
         }
 
         // C. 靠近窗口右边缘 (Right Border of IE) -> 抓墙往上爬
-        if (std::abs(anchor.x - ie.right) <= snapThreshold &&
-            anchor.y >= (ie.top - snapThreshold) && anchor.y <= (ie.bottom + snapThreshold)) {
+        if (std::abs(anchor.x - ie.right) <= 45.0 &&
+            anchor.y >= (ie.top - 30.0) && anchor.y <= (ie.bottom + 30.0)) {
             anchor.x = ie.right;
             m_mascot->state->looking_right = true; // 朝向窗口
             m_mascot->next_behavior("ClimbAlongWall");
             updateOffsets();
             repaint();
+            std::cout << "[智能吸附] 成功吸附到活跃窗口右边缘!" << std::endl;
             return;
         }
     }

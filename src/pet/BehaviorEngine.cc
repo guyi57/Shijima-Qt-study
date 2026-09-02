@@ -343,12 +343,20 @@ void BehaviorEngine::onTick()
                             else target->mascot().next_behavior("SitWhileDanglingLegs");
                         }
                     }
-                    // 中心情 (-20 ~ +30): 正常巡逻、偶尔看光标
+                    // 中心情 (-20 ~ +30): 正常巡逻、窗口探秘、看光标
                     else if (tier == MoodTier::Medium) {
-                        int r = rand() % 3;
-                        if (r == 0) target->mascot().next_behavior("WalkAlongWorkAreaFloor");
-                        else if (r == 1) target->mascot().next_behavior("SitAndFaceMouse");
-                        else target->mascot().next_behavior("WalkAndGrabBottomRightWall");
+                        if (env && env->active_ie.visible()) {
+                            int r = rand() % 4;
+                            if (r == 0) target->mascot().next_behavior("WalkAlongIECeiling");
+                            else if (r == 1) target->mascot().next_behavior("JumpFromBottomOfIE");
+                            else if (r == 2) target->mascot().next_behavior("SitAndFaceMouse");
+                            else target->mascot().next_behavior("WalkAlongWorkAreaFloor");
+                        } else {
+                            int r = rand() % 3;
+                            if (r == 0) target->mascot().next_behavior("WalkAlongWorkAreaFloor");
+                            else if (r == 1) target->mascot().next_behavior("SitAndFaceMouse");
+                            else target->mascot().next_behavior("WalkAndGrabBottomRightWall");
+                        }
                     }
                     // 低心情 (-60 ~ -20): 拒绝剧烈攀爬，缩在屏幕角落漫步
                     else if (tier == MoodTier::Low) {

@@ -35,6 +35,8 @@
 !/cpp-httplib
 !/HTTP-API.md
 !/LICENSE
+!/docs/
+!/docs/**
 !/.images/
 !/.images/**
 
